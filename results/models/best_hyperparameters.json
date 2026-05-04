@@ -1,1 +1,8 @@
-{"hidden_dim": 256, "dropout": 0.25960830448732375, "lr": 0.0005882303146475812, "weight_decay": 0.0001251646518306187, "batch_size": 32, "num_layers": 4}
+{
+  "hidden_dim": 128,
+  "dropout": 0.4402910206224737,
+  "lr": 0.00011248613366724776,
+  "weight_decay": 5.085469541366334e-05,
+  "batch_size": 128,
+  "num_layers": 2
+}
