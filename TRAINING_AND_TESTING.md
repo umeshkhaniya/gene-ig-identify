@@ -170,7 +170,7 @@ results/models/heldout_confusion_matrix.csv
 results/models/heldout_confusion_matrix.xlsx
 ```
 
-The classification report includes precision, recall, F1-score, support, macro average, and weighted average.
+The classification report includes precision, recall, F1-score, support, macro average, and weighted average. Scores are rounded to two decimals, class support values are integers, and summary rows leave support blank.
 
 ## Testing With `input_data.xlsx`
 

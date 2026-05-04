@@ -69,6 +69,46 @@ def _label_ids_from_graphs_or_file(graph_labels, test_labels_file: Path) -> list
     return [int(label) for label in test_labels]
 
 
+def _format_score(value) -> float | str:
+    if pd.isna(value):
+        return ""
+    return round(float(value), 2)
+
+
+def _format_support(value, include_support: bool) -> int | str:
+    if not include_support or pd.isna(value):
+        return ""
+    return int(value)
+
+
+def _classification_report_table(report: dict) -> pd.DataFrame:
+    rows = []
+    for row_name, values in report.items():
+        if row_name == "accuracy":
+            rows.append(
+                {
+                    "label": row_name,
+                    "precision": "",
+                    "recall": "",
+                    "f1-score": _format_score(values),
+                    "support": "",
+                }
+            )
+            continue
+
+        include_support = row_name not in {"macro avg", "weighted avg"}
+        rows.append(
+            {
+                "label": row_name,
+                "precision": _format_score(values.get("precision")),
+                "recall": _format_score(values.get("recall")),
+                "f1-score": _format_score(values.get("f1-score")),
+                "support": _format_support(values.get("support"), include_support),
+            }
+        )
+    return pd.DataFrame(rows).set_index("label")
+
+
 def main(argv: list[str] | None = None) -> None:
     from gene_ig_identify.io.artifacts import load_torch
     from gene_ig_identify.labels import REVERSE_LABEL_MAPPING
@@ -143,7 +183,7 @@ def main(argv: list[str] | None = None) -> None:
         output_dict=True,
         zero_division=0,
     )
-    report_df = pd.DataFrame(report).T
+    report_df = _classification_report_table(report)
     confusion_df = pd.DataFrame(
         confusion_matrix(df["true_class_id"], df["predicted_class_id"], labels=labels),
         index=label_names,
