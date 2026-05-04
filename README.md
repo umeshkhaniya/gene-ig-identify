@@ -109,6 +109,8 @@ For prediction, `ig_type` can be omitted because it is the value the model predi
 
 ## Predict New Ig Domains
 
+Run the commands in this section from the repository root, the folder that contains `pyproject.toml` and `src/`. On Biowulf, this usually means running `cd gene-ig-identify` after cloning the repository.
+
 Save new domains in a file such as:
 
 ```text
@@ -160,11 +162,26 @@ python src/create_sequences.py \
 Create ESM-2 embeddings:
 
 ```bash
+mkdir -p /data/$USER/gene-ig-identify-esm-cache
 python src/create_esm_embeddings.py \
   --input-file output/new_domain_sequences.pkl.gz \
   --output-file output/new_domain_esm_embeddings.h5 \
-  --model-name esm2_t33_650M_UR50D
+  --model-name esm2_t33_650M_UR50D \
+  --cache-dir /data/$USER/gene-ig-identify-esm-cache
 ```
+
+After installation, you can also run the installed command instead of referencing `src/create_esm_embeddings.py` directly:
+
+```bash
+mkdir -p /data/$USER/gene-ig-identify-esm-cache
+gene-ig-create-esm-embeddings \
+  --input-file output/new_domain_sequences.pkl.gz \
+  --output-file output/new_domain_esm_embeddings.h5 \
+  --model-name esm2_t33_650M_UR50D \
+  --cache-dir /data/$USER/gene-ig-identify-esm-cache
+```
+
+On Biowulf, keep this cache in `/data/$USER` so the large ESM-2 model download does not fill `/home/$USER/.cache`.
 
 Build unlabeled prediction graphs:
 
@@ -237,7 +254,7 @@ gene-ig-identify config validate
 gene-ig-identify features icn3d --input-table input/new_domains.xlsx --input-dir input
 gene-ig-identify features structures --input-table input/new_domains.xlsx --input-dir input
 gene-ig-identify sequences extract --input-table input/new_domains.xlsx --output-file output/new_domain_sequences.pkl.gz
-gene-ig-identify embeddings esm --input-file output/new_domain_sequences.pkl.gz --output-file output/new_domain_esm_embeddings.h5
+gene-ig-identify embeddings esm --input-file output/new_domain_sequences.pkl.gz --output-file output/new_domain_esm_embeddings.h5 --cache-dir /data/$USER/gene-ig-identify-esm-cache
 gene-ig-identify graphs build --input-table input/new_domains.xlsx --embeddings-file output/new_domain_esm_embeddings.h5 --graphs-output results/graphs/new_domain_graphs.pt --graph-lookup-output results/graphs/new_domain_graph_lookup.pt
 gene-ig-identify predict dataset --graphs-file results/graphs/new_domain_graphs.pt --excel-file input/new_domains.xlsx --model-dir results/models --output-dir output
 ```
