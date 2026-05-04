@@ -74,18 +74,7 @@ This is only a quick check. Do not use the smoke-test model as the final model.
 
 ## Training From Scratch
 
-To keep the previous model, train into a fresh output directory:
-
-```bash
-gene-ig-identify train \
-  --graphs-file results/graphs/training_testing_graphs.pt \
-  --graph-lookup-file results/graphs/training_testing_graph_lookup.pt \
-  --output-dir results/models_from_scratch \
-  --epochs 100 \
-  --trials 30
-```
-
-To replace the default model used by prediction, write directly to `results/models`:
+Run training into `results/models`. If files already exist there, retraining updates them with the new model artifacts:
 
 ```bash
 gene-ig-identify train \
@@ -107,24 +96,22 @@ The training workflow does the following:
 Expected model outputs:
 
 ```text
-results/models_from_scratch/best_graph_model.pth
-results/models_from_scratch/best_hyperparameters.json
-results/models_from_scratch/model_config.json
-results/models_from_scratch/cross_validation_summary.json
-results/models_from_scratch/test_graphs.pt
-results/models_from_scratch/test_labels.pt
-results/models_from_scratch/loss_accuracy_plot_hybrid.png
+results/models/best_graph_model.pth
+results/models/best_hyperparameters.json
+results/models/model_config.json
+results/models/cross_validation_summary.json
+results/models/test_graphs.pt
+results/models/test_labels.pt
+results/models/loss_accuracy_plot_hybrid.png
 ```
-
-If you trained into `results/models`, the same files will appear there instead.
 
 ## Evaluation
 
 Evaluation during training is handled by cross-validation and the final validation split. Inspect the saved summary files after training:
 
 ```bash
-python -m json.tool results/models_from_scratch/cross_validation_summary.json
-python -m json.tool results/models_from_scratch/model_config.json
+python -m json.tool results/models/cross_validation_summary.json
+python -m json.tool results/models/model_config.json
 ```
 
 Important fields:
@@ -140,7 +127,7 @@ Important fields:
 Also review:
 
 ```text
-results/models_from_scratch/loss_accuracy_plot_hybrid.png
+results/models/loss_accuracy_plot_hybrid.png
 ```
 
 This plot shows training loss, validation loss, and validation accuracy across final training epochs.
@@ -150,18 +137,34 @@ This plot shows training loss, validation loss, and validation accuracy across f
 The training command saves the held-out test graphs and labels:
 
 ```text
-results/models_from_scratch/test_graphs.pt
-results/models_from_scratch/test_labels.pt
+results/models/test_graphs.pt
+results/models/test_labels.pt
 ```
 
 The simplest held-out test result is already recorded in:
 
 ```text
-results/models_from_scratch/cross_validation_summary.json
-results/models_from_scratch/model_config.json
+results/models/cross_validation_summary.json
+results/models/model_config.json
 ```
 
 Use `final_test_accuracy` as the main test metric, because those graphs were not used for hyperparameter tuning or final model fitting.
+
+To create a readable prediction table from `results/models/test_graphs.pt`, run:
+
+```bash
+python src/evaluate_test_graphs.py \
+  --model-dir results/models \
+  --test-graphs results/models/test_graphs.pt \
+  --test-labels results/models/test_labels.pt
+```
+
+This writes:
+
+```text
+results/models/heldout_test_predictions.csv
+results/models/heldout_test_predictions.xlsx
+```
 
 ## Testing With `input_data.xlsx`
 
@@ -171,7 +174,7 @@ You can also run the trained model across the full original table for a row-by-r
 gene-ig-identify predict dataset \
   --graphs-file results/graphs/training_testing_graphs.pt \
   --excel-file input_data.xlsx \
-  --model-dir results/models_from_scratch \
+  --model-dir results/models \
   --output-dir output
 ```
 
@@ -184,32 +187,13 @@ output/input_data_prediction_details.xlsx
 
 This full-table test is useful for inspection, but it is not an independent held-out test if the same graphs were used for training. Treat the held-out `final_test_accuracy` from the training run as the cleaner testing metric.
 
-If you trained into `results/models`, use:
-
-```bash
-gene-ig-identify predict dataset \
-  --graphs-file results/graphs/training_testing_graphs.pt \
-  --excel-file input_data.xlsx \
-  --model-dir results/models \
-  --output-dir output
-```
-
 ## Quick Accuracy Check For Full-Table Predictions
 
 After running `predict dataset`, calculate label agreement with the `ig_type` column:
 
 ```bash
-python - <<'PY'
-import pandas as pd
-
-df = pd.read_excel("output/input_data_with_predictions.xlsx")
-df = df[df["ig_type"].notna()].copy()
-accuracy = (df["ig_type"].astype(str) == df["predicted_label"].astype(str)).mean()
-
-print(f"Rows evaluated: {len(df)}")
-print(f"Accuracy: {accuracy:.4f}")
-print(pd.crosstab(df["ig_type"], df["predicted_label"], rownames=["true"], colnames=["predicted"]))
-PY
+python src/evaluate_prediction_excel.py \
+  --predictions-file output/input_data_with_predictions.xlsx
 ```
 
 Rows predicted as `Other` are low-confidence predictions below the configured confidence threshold.

@@ -29,5 +29,4 @@ results/**/*.json
 !results/models/
 !results/models/*.json
 !results/models/*.pth
-!results/models/*.pt
 !results/models/*.png

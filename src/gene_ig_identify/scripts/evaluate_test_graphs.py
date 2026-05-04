@@ -1,0 +1,114 @@
+"""Evaluate saved held-out test graphs from a trained model directory."""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import pandas as pd
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="evaluate_test_graphs.py",
+        description="Create a readable held-out test report from saved test_graphs.pt.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--model-dir",
+        default="results/models",
+        help="Directory containing the trained model artifacts and saved test split.",
+    )
+    parser.add_argument(
+        "--test-graphs",
+        help="Path to test_graphs.pt. Defaults to <model-dir>/test_graphs.pt.",
+    )
+    parser.add_argument(
+        "--test-labels",
+        help="Path to test_labels.pt. Defaults to <model-dir>/test_labels.pt.",
+    )
+    parser.add_argument(
+        "--output-csv",
+        help="CSV output path. Defaults to <model-dir>/heldout_test_predictions.csv.",
+    )
+    parser.add_argument(
+        "--output-excel",
+        help="Excel output path. Defaults to <model-dir>/heldout_test_predictions.xlsx.",
+    )
+    parser.add_argument(
+        "--device",
+        default="auto",
+        help="Torch device to use: auto, cpu, cuda, cuda:0, etc.",
+    )
+    return parser
+
+
+def _label_ids_from_graphs_or_file(graph_labels, test_labels_file: Path) -> list[int]:
+    from gene_ig_identify.io.artifacts import load_torch
+
+    if len(graph_labels):
+        return [int(label) for label in graph_labels]
+    test_labels = load_torch(test_labels_file)
+    return [int(label) for label in test_labels]
+
+
+def main(argv: list[str] | None = None) -> None:
+    from gene_ig_identify.io.artifacts import load_torch
+    from gene_ig_identify.labels import REVERSE_LABEL_MAPPING
+    from gene_ig_identify.models.inference import load_model, predict_graphs, resolve_device
+
+    args = build_parser().parse_args(argv)
+    model_dir = Path(args.model_dir)
+    test_graphs_file = Path(args.test_graphs) if args.test_graphs else model_dir / "test_graphs.pt"
+    test_labels_file = Path(args.test_labels) if args.test_labels else model_dir / "test_labels.pt"
+    output_csv = Path(args.output_csv) if args.output_csv else model_dir / "heldout_test_predictions.csv"
+    output_excel = Path(args.output_excel) if args.output_excel else model_dir / "heldout_test_predictions.xlsx"
+
+    graphs = load_torch(test_graphs_file)
+    device = resolve_device(args.device)
+    model, best_params = load_model(model_dir, device)
+    preds, probs, graph_labels, graph_names = predict_graphs(
+        graphs,
+        model,
+        best_params["batch_size"],
+        device,
+    )
+
+    true_ids = _label_ids_from_graphs_or_file(graph_labels, test_labels_file)
+    if len(true_ids) != len(preds):
+        raise ValueError(f"Expected {len(preds)} labels, found {len(true_ids)} in the held-out test data.")
+
+    rows = []
+    for idx, pred_id in enumerate(preds):
+        pred_id = int(pred_id)
+        true_id = int(true_ids[idx])
+        rows.append(
+            {
+                "graph_name": graph_names[idx],
+                "true_class_id": true_id,
+                "true_label": REVERSE_LABEL_MAPPING[true_id],
+                "predicted_class_id": pred_id,
+                "predicted_label": REVERSE_LABEL_MAPPING[pred_id],
+                "prediction_confidence": float(probs[idx][pred_id]),
+                "correct": pred_id == true_id,
+            }
+        )
+
+    df = pd.DataFrame(rows)
+    accuracy = df["correct"].mean()
+    confusion = pd.crosstab(df["true_label"], df["predicted_label"], rownames=["true"], colnames=["predicted"])
+
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+    output_excel.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(output_csv, index=False)
+    df.to_excel(output_excel, index=False)
+
+    print(f"Held-out test rows: {len(df)}")
+    print(f"Held-out test accuracy: {accuracy:.4f}")
+    print(confusion)
+    print(f"Saved CSV: {output_csv}")
+    print(f"Saved Excel: {output_excel}")
+
+
+if __name__ == "__main__":
+    main()
