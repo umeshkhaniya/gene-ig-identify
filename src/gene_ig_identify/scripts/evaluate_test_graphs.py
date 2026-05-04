@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 import pandas as pd
+from sklearn.metrics import classification_report, confusion_matrix
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,6 +37,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Excel output path. Defaults to <model-dir>/heldout_test_predictions.xlsx.",
     )
     parser.add_argument(
+        "--classification-report-csv",
+        help="Classification report CSV path. Defaults to <model-dir>/heldout_classification_report.csv.",
+    )
+    parser.add_argument(
+        "--classification-report-excel",
+        help="Classification report Excel path. Defaults to <model-dir>/heldout_classification_report.xlsx.",
+    )
+    parser.add_argument(
+        "--confusion-matrix-csv",
+        help="Confusion matrix CSV path. Defaults to <model-dir>/heldout_confusion_matrix.csv.",
+    )
+    parser.add_argument(
+        "--confusion-matrix-excel",
+        help="Confusion matrix Excel path. Defaults to <model-dir>/heldout_confusion_matrix.xlsx.",
+    )
+    parser.add_argument(
         "--device",
         default="auto",
         help="Torch device to use: auto, cpu, cuda, cuda:0, etc.",
@@ -63,6 +80,26 @@ def main(argv: list[str] | None = None) -> None:
     test_labels_file = Path(args.test_labels) if args.test_labels else model_dir / "test_labels.pt"
     output_csv = Path(args.output_csv) if args.output_csv else model_dir / "heldout_test_predictions.csv"
     output_excel = Path(args.output_excel) if args.output_excel else model_dir / "heldout_test_predictions.xlsx"
+    report_csv = (
+        Path(args.classification_report_csv)
+        if args.classification_report_csv
+        else model_dir / "heldout_classification_report.csv"
+    )
+    report_excel = (
+        Path(args.classification_report_excel)
+        if args.classification_report_excel
+        else model_dir / "heldout_classification_report.xlsx"
+    )
+    matrix_csv = (
+        Path(args.confusion_matrix_csv)
+        if args.confusion_matrix_csv
+        else model_dir / "heldout_confusion_matrix.csv"
+    )
+    matrix_excel = (
+        Path(args.confusion_matrix_excel)
+        if args.confusion_matrix_excel
+        else model_dir / "heldout_confusion_matrix.xlsx"
+    )
 
     graphs = load_torch(test_graphs_file)
     device = resolve_device(args.device)
@@ -96,18 +133,46 @@ def main(argv: list[str] | None = None) -> None:
 
     df = pd.DataFrame(rows)
     accuracy = df["correct"].mean()
-    confusion = pd.crosstab(df["true_label"], df["predicted_label"], rownames=["true"], colnames=["predicted"])
+    labels = sorted(set(df["true_class_id"]) | set(df["predicted_class_id"]))
+    label_names = [REVERSE_LABEL_MAPPING[label] for label in labels]
+    report = classification_report(
+        df["true_class_id"],
+        df["predicted_class_id"],
+        labels=labels,
+        target_names=label_names,
+        output_dict=True,
+        zero_division=0,
+    )
+    report_df = pd.DataFrame(report).T
+    confusion_df = pd.DataFrame(
+        confusion_matrix(df["true_class_id"], df["predicted_class_id"], labels=labels),
+        index=label_names,
+        columns=label_names,
+    )
+    confusion_df.index.name = "true"
+    confusion_df.columns.name = "predicted"
 
-    output_csv.parent.mkdir(parents=True, exist_ok=True)
-    output_excel.parent.mkdir(parents=True, exist_ok=True)
+    for output_path in (output_csv, output_excel, report_csv, report_excel, matrix_csv, matrix_excel):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_csv, index=False)
     df.to_excel(output_excel, index=False)
+    report_df.to_csv(report_csv)
+    report_df.to_excel(report_excel)
+    confusion_df.to_csv(matrix_csv)
+    confusion_df.to_excel(matrix_excel)
 
     print(f"Held-out test rows: {len(df)}")
     print(f"Held-out test accuracy: {accuracy:.4f}")
-    print(confusion)
-    print(f"Saved CSV: {output_csv}")
-    print(f"Saved Excel: {output_excel}")
+    print("Classification report:")
+    print(report_df)
+    print("Confusion matrix:")
+    print(confusion_df)
+    print(f"Saved predictions CSV: {output_csv}")
+    print(f"Saved predictions Excel: {output_excel}")
+    print(f"Saved classification report CSV: {report_csv}")
+    print(f"Saved classification report Excel: {report_excel}")
+    print(f"Saved confusion matrix CSV: {matrix_csv}")
+    print(f"Saved confusion matrix Excel: {matrix_excel}")
 
 
 if __name__ == "__main__":

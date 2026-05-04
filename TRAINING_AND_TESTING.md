@@ -164,7 +164,13 @@ This writes:
 ```text
 results/models/heldout_test_predictions.csv
 results/models/heldout_test_predictions.xlsx
+results/models/heldout_classification_report.csv
+results/models/heldout_classification_report.xlsx
+results/models/heldout_confusion_matrix.csv
+results/models/heldout_confusion_matrix.xlsx
 ```
+
+The classification report includes precision, recall, F1-score, support, macro average, and weighted average.
 
 ## Testing With `input_data.xlsx`
 
