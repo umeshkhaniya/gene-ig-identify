@@ -86,7 +86,7 @@ If `/data/$USER` is not available for your account, create the venv in another w
 Important dependency notes:
 
 - `fair-esm` is installed from [`pyproject.toml`](pyproject.toml); the first embedding run may download ESM-2 model weights into the PyTorch cache.
-- iCn3D is a Node.js dependency. Install Node.js/npm and the iCn3D npm packages separately before running the iCn3D feature step.
+- iCn3D is a Node.js dependency. Install Node.js/npm and the iCn3D npm packages separately before running the iCn3D feature step. See the iCn3D npm package: <https://www.npmjs.com/package/icn3d>.
 
 ## Input Table
 
