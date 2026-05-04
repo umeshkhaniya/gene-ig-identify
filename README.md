@@ -1,20 +1,6 @@
 # gene-ig-identify
-Gene Ig Identify is a Python project for finding and classifying immunoglobulin (Ig) and Ig-like domains in protein structures.
-
-The main goal is to quantify Ig domains in the human genome at both the domain level and the chain level. Ig domains are important building blocks in antibodies, T cell receptors, and many cell-surface receptors, so counting and classifying them helps us better understand immune diversity, gene-family expansion, and possible links to immune function and disease.
-
-This project uses structure features, protein sequence embeddings, Ig-strand numbering ideas, and a graph neural network to identify Ig-domain types more precisely than broad structural search alone.
-
-## What It Does
-
-- Works with human UniProt gene entries and protein structure data.
-- Extracts domain sequences and residue-level structure features.
-- Builds graph data for Ig and Ig-like domains.
-- Creates ESM protein embeddings from domain sequences.
-- Trains or runs a graph neural network model.
-- Produces Ig-domain predictions for new input tables.
-
-Python tools for building Ig-domain graphs and predicting Ig-domain labels from prepared structure, sequence, and ESM-2 features.
+Gene Ig can predict immunoglobulin (Ig) and Ig-like domains in protein structures. The main goal is to quantify Ig domains in the human genome at both the domain and chain levels. Ig domains are important building blocks in antibodies, T cell receptors, and many cell-surface receptors. Counting and classifying them can help us better understand immune diversity, gene-family expansion, and possible links to immune function and disease. This approach can be applied to any genome.
+The graph is created using structural features and sequence features from ESMFold embeddings, and it uses a graph neural network to identify Ig-domain types more precisely than broad structural searches alone.
 
 The active workflow lives under `src/`.
 
