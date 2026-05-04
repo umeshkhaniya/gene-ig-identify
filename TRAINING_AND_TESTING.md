@@ -133,6 +133,9 @@ Important fields:
 - `best_value`: best cross-validation loss minimized by Optuna.
 - `final_test_accuracy`: held-out test accuracy after final training.
 - `test_accuracy`: same held-out test accuracy stored in `model_config.json`.
+- `best_epoch`: final-training epoch whose checkpoint was saved.
+- `best_validation_loss`: validation loss at the saved checkpoint.
+- `best_validation_accuracy`: validation accuracy at the saved checkpoint.
 
 Also review:
 
@@ -140,7 +143,7 @@ Also review:
 results/models_from_scratch/loss_accuracy_plot_hybrid.png
 ```
 
-This plot shows training loss and validation accuracy across final training epochs.
+This plot shows training loss, validation loss, and validation accuracy across final training epochs.
 
 ## Testing On The Held-Out Split
 

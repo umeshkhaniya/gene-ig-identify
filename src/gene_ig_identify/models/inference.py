@@ -36,10 +36,14 @@ def load_model(model_dir: str | Path, device: torch.device):
             f"{model_config.get('node_features')} node features, but the package expects "
             f"{EXPECTED_NODE_FEATURES}."
         )
-    if int(model_config.get("edge_in_channels_featutes", EXPECTED_EDGE_FEATURES)) != EXPECTED_EDGE_FEATURES:
+    edge_features = model_config.get(
+        "edge_in_channels_features",
+        model_config.get("edge_in_channels_featutes", EXPECTED_EDGE_FEATURES),
+    )
+    if int(edge_features) != EXPECTED_EDGE_FEATURES:
         raise ValueError(
             f"Model config at {model_dir / 'model_config.json'} expects "
-            f"{model_config.get('edge_in_channels_featutes')} edge features, but the package expects "
+            f"{edge_features} edge features, but the package expects "
             f"{EXPECTED_EDGE_FEATURES}."
         )
     model = GraphClassifier(
