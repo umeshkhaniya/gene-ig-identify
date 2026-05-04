@@ -1,20 +1,28 @@
-# Training And Testing Reference
+# Training And Testing
 
-This is a reference workflow for training a new model and checking it on labeled data. Run commands from the repository root, the folder that contains `pyproject.toml` and `src/`.
+These instructions retrain the graph model from scratch using an already-built labeled graph dataset.
 
-## Training Input
+Run all commands from the repository root, the folder that contains `pyproject.toml`, `src/`, and `input_data.xlsx`.
 
-Training uses the same feature-generation and graph-building pipeline as prediction, but the input table must include `ig_type`.
+## Files Used
 
-Required columns:
+You should have these files available:
 
-- `pdbid_chain`
-- `igdomain_res_range`
-- `ig_type`
+```text
+input_data.xlsx
+training_testing_graphs.pt
+training_testing_graph_lookup.pt
+```
 
-Optional columns such as `score`, `seqid`, and `refpdbname` can stay in the table.
+Use `input_data.xlsx`, not `input_data.xlxs`. The code supports `.xlsx`, `.xls`, `.csv`, `.tsv`, and `.txt`.
 
-Stable labels:
+The `.pt` files are the actual training inputs:
+
+- `training_testing_graphs.pt`: list of graph objects.
+- `training_testing_graph_lookup.pt`: lookup of graph names to graph objects. The training workflow uses this lookup for splitting and training.
+- `input_data.xlsx`: original row table used later for prediction-style testing and row-preserving output.
+
+Each graph used for training must include a label from the stable mapping:
 
 ```text
 IgV
@@ -27,199 +35,171 @@ Lamin
 CD19
 ```
 
-Rows with labels outside this list are skipped during labeled graph generation and training.
+Training needs enough examples for stratified splitting. In practice, each class present in the graph dataset should have at least 6 examples, because the code first creates a held-out test split and then runs 5-fold cross-validation on the remaining training/evaluation graphs.
 
-Training requires enough labeled examples for stratified splitting. The code makes a held-out test split first, then uses 5-fold cross-validation on the remaining training/validation graphs. If any class has too few examples after the held-out split, training will stop with a clear error.
+## Environment
 
-## Build Training Graphs
-
-Use a labeled input file such as:
-
-```text
-input/train_domains.xlsx
-```
-
-Create structure, sequence, ESM, and graph files with the same steps used for prediction. Use training-specific output names so they do not overwrite prediction files:
+Activate the environment where the package and dependencies are installed:
 
 ```bash
-gene-ig-identify features icn3d \
-  --input-table input/train_domains.xlsx \
-  --input-dir input \
-  --node-executable node
-
-gene-ig-identify features structures \
-  --input-table input/train_domains.xlsx \
-  --input-dir input \
-  --pdb-subdir pdb_files \
-  --structure-subdir structure_features_residues \
-  --cutoff-distance 8
-
-python src/create_sequences.py \
-  --input-table input/train_domains.xlsx \
-  --sequence-dir input/sequence_file \
-  --output-file output/train_sequences.pkl.gz
-
-mkdir -p /data/$USER/gene-ig-identify-esm-cache
-gene-ig-create-esm-embeddings \
-  --input-file output/train_sequences.pkl.gz \
-  --output-file output/train_esm_embeddings.h5 \
-  --model-name esm2_t33_650M_UR50D \
-  --cache-dir /data/$USER/gene-ig-identify-esm-cache
-
-python src/create_graphs.py \
-  --input-table input/train_domains.xlsx \
-  --pdb-dir input/pdb_files \
-  --icn3dss-dir input/icn3dss \
-  --structure-features-dir input/structure_features_residues \
-  --icn3d-interactions-dir input/icn3d_interactions \
-  --embeddings-file output/train_esm_embeddings.h5 \
-  --graphs-output results/graphs/train_graphs.pt \
-  --graph-lookup-output results/graphs/train_graph_lookup.pt
+source gene-ig-identify-venv/bin/activate
 ```
 
-## Train Model
+If the package is not installed yet, install it from the repository root:
 
-Default training output goes to `results/models`, because `config/default.yaml` sets:
-
-```yaml
-models_dir: results/models
+```bash
+python -m pip install -e .
 ```
 
-Run:
+Confirm the CLI is available:
+
+```bash
+gene-ig-identify labels show
+```
+
+## Optional Smoke Test
+
+Before a long run, you can check that the graph files load and the training command starts correctly:
 
 ```bash
 gene-ig-identify train \
-  --graphs-file results/graphs/train_graphs.pt \
-  --graph-lookup-file results/graphs/train_graph_lookup.pt \
+  --graphs-file training_testing_graphs.pt \
+  --graph-lookup-file training_testing_graph_lookup.pt \
+  --output-dir results/models_smoke_test \
+  --epochs 2 \
+  --trials 1
+```
+
+This is only a quick check. Do not use the smoke-test model as the final model.
+
+## Training From Scratch
+
+To keep the previous model, train into a fresh output directory:
+
+```bash
+gene-ig-identify train \
+  --graphs-file training_testing_graphs.pt \
+  --graph-lookup-file training_testing_graph_lookup.pt \
+  --output-dir results/models_from_scratch \
   --epochs 100 \
   --trials 30
 ```
 
-To write model artifacts somewhere else:
+To replace the default model used by prediction, write directly to `results/models`:
 
 ```bash
 gene-ig-identify train \
-  --graphs-file results/graphs/train_graphs.pt \
-  --graph-lookup-file results/graphs/train_graph_lookup.pt \
+  --graphs-file training_testing_graphs.pt \
+  --graph-lookup-file training_testing_graph_lookup.pt \
   --output-dir results/models \
   --epochs 100 \
   --trials 30
 ```
 
-Training performs a held-out test split and stratified 5-fold cross-validation for Optuna hyperparameter tuning.
+The training workflow does the following:
 
-Expected training outputs:
+1. Loads labeled graphs from `training_testing_graph_lookup.pt`.
+2. Creates a stratified held-out test split.
+3. Runs Optuna hyperparameter tuning with stratified 5-fold cross-validation on the remaining graphs.
+4. Trains a final model from scratch using the best hyperparameters.
+5. Evaluates the final model on the held-out test split.
 
-```text
-results/models/best_graph_model.pth
-results/models/best_hyperparameters.json
-results/models/model_config.json
-results/models/cross_validation_summary.json
-results/models/test_graphs.pt
-results/models/test_labels.pt
-results/models/loss_accuracy_plot_hybrid.png
-```
-
-The prediction workflow needs these three reusable files:
+Expected model outputs:
 
 ```text
-results/models/best_graph_model.pth
-results/models/best_hyperparameters.json
-results/models/model_config.json
+results/models_from_scratch/best_graph_model.pth
+results/models_from_scratch/best_hyperparameters.json
+results/models_from_scratch/model_config.json
+results/models_from_scratch/cross_validation_summary.json
+results/models_from_scratch/test_graphs.pt
+results/models_from_scratch/test_labels.pt
+results/models_from_scratch/loss_accuracy_plot_hybrid.png
 ```
 
-## Biowulf Training Notes
+If you trained into `results/models`, the same files will appear there instead.
 
-Run long training and ESM embedding jobs on an interactive or batch compute job, not the login node.
+## Evaluation
 
-Example interactive GPU session:
+Evaluation during training is handled by cross-validation and the final validation split. Inspect the saved summary files after training:
 
 ```bash
-sinteractive --gres=gpu:a100:1 --cpus-per-task=8 --mem=64g --time=12:00:00
-module load python/3.11
-source /data/$USER/gene-ig-identify-venv/bin/activate
-cd /path/to/gene-ig-identify
+python -m json.tool results/models_from_scratch/cross_validation_summary.json
+python -m json.tool results/models_from_scratch/model_config.json
 ```
 
-Check CUDA visibility:
+Important fields:
 
-```bash
-python -c "import torch; print(torch.cuda.is_available()); print(torch.version.cuda)"
-```
+- `best_mean_cv_accuracy`: mean accuracy from the best Optuna trial during 5-fold cross-validation.
+- `best_value`: best cross-validation loss minimized by Optuna.
+- `final_test_accuracy`: held-out test accuracy after final training.
+- `test_accuracy`: same held-out test accuracy stored in `model_config.json`.
 
-If `torch.cuda.is_available()` prints `False`, the job may still run on CPU, but training and ESM embeddings will be much slower.
-
-## Testing A Trained Model On Labeled Data
-
-The current public CLI uses `predict dataset` for model testing on any labeled or unlabeled dataset. For a labeled test file, keep the `ig_type` column in the Excel/CSV/TSV input. The prediction output will preserve the original rows and add:
+Also review:
 
 ```text
-predicted_label
-predicted_class_id
-prediction_confidence
+results/models_from_scratch/loss_accuracy_plot_hybrid.png
 ```
 
-Build graph files for the test dataset:
+This plot shows training loss and validation accuracy across final training epochs.
 
-```bash
-gene-ig-identify features icn3d \
-  --input-table input/test_domains.xlsx \
-  --input-dir input \
-  --node-executable node
+## Testing On The Held-Out Split
 
-gene-ig-identify features structures \
-  --input-table input/test_domains.xlsx \
-  --input-dir input \
-  --pdb-subdir pdb_files \
-  --structure-subdir structure_features_residues \
-  --cutoff-distance 8
+The training command saves the held-out test graphs and labels:
 
-python src/create_sequences.py \
-  --input-table input/test_domains.xlsx \
-  --sequence-dir input/sequence_file \
-  --output-file output/test_sequences.pkl.gz
-
-gene-ig-create-esm-embeddings \
-  --input-file output/test_sequences.pkl.gz \
-  --output-file output/test_esm_embeddings.h5 \
-  --model-name esm2_t33_650M_UR50D \
-  --cache-dir /data/$USER/gene-ig-identify-esm-cache
-
-python src/create_graphs.py \
-  --input-table input/test_domains.xlsx \
-  --pdb-dir input/pdb_files \
-  --icn3dss-dir input/icn3dss \
-  --structure-features-dir input/structure_features_residues \
-  --icn3d-interactions-dir input/icn3d_interactions \
-  --embeddings-file output/test_esm_embeddings.h5 \
-  --graphs-output results/graphs/test_graphs.pt \
-  --graph-lookup-output results/graphs/test_graph_lookup.pt
+```text
+results/models_from_scratch/test_graphs.pt
+results/models_from_scratch/test_labels.pt
 ```
 
-Run prediction with the trained model:
+The simplest held-out test result is already recorded in:
+
+```text
+results/models_from_scratch/cross_validation_summary.json
+results/models_from_scratch/model_config.json
+```
+
+Use `final_test_accuracy` as the main test metric, because those graphs were not used for hyperparameter tuning or final model fitting.
+
+## Testing With `input_data.xlsx`
+
+You can also run the trained model across the full original table for a row-by-row prediction file:
 
 ```bash
 gene-ig-identify predict dataset \
-  --graphs-file results/graphs/test_graphs.pt \
-  --excel-file input/test_domains.xlsx \
-  --model-dir results/models \
+  --graphs-file training_testing_graphs.pt \
+  --excel-file input_data.xlsx \
+  --model-dir results/models_from_scratch \
   --output-dir output
 ```
 
 Expected outputs:
 
 ```text
-output/test_domains_with_predictions.xlsx
-output/test_domains_prediction_details.xlsx
+output/input_data_with_predictions.xlsx
+output/input_data_prediction_details.xlsx
 ```
 
-Quick labeled accuracy check:
+This full-table test is useful for inspection, but it is not an independent held-out test if the same graphs were used for training. Treat the held-out `final_test_accuracy` from the training run as the cleaner testing metric.
+
+If you trained into `results/models`, use:
+
+```bash
+gene-ig-identify predict dataset \
+  --graphs-file training_testing_graphs.pt \
+  --excel-file input_data.xlsx \
+  --model-dir results/models \
+  --output-dir output
+```
+
+## Quick Accuracy Check For Full-Table Predictions
+
+After running `predict dataset`, calculate label agreement with the `ig_type` column:
 
 ```bash
 python - <<'PY'
 import pandas as pd
 
-df = pd.read_excel("output/test_domains_with_predictions.xlsx")
+df = pd.read_excel("output/input_data_with_predictions.xlsx")
 df = df[df["ig_type"].notna()].copy()
 accuracy = (df["ig_type"].astype(str) == df["predicted_label"].astype(str)).mean()
 
@@ -229,4 +209,12 @@ print(pd.crosstab(df["ig_type"], df["predicted_label"], rownames=["true"], colna
 PY
 ```
 
-Rows predicted as `Other` are usually low-confidence predictions below the configured confidence threshold.
+Rows predicted as `Other` are low-confidence predictions below the configured confidence threshold.
+
+## Notes
+
+- Use a GPU for long training runs when possible. The code automatically uses CUDA if `torch.cuda.is_available()` is true.
+- Increase `--trials` for a broader hyperparameter search.
+- Increase `--epochs` for longer final training.
+- If training fails with a stratification error, check class counts in the graph dataset and add more labeled examples for the smallest class.
+- If `predict dataset` reports row alignment problems, make sure `training_testing_graphs.pt` was built from the same `input_data.xlsx` rows and label values.
