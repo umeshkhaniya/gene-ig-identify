@@ -261,6 +261,8 @@ gene-ig-identify predict dataset --graphs-file results/graphs/new_domain_graphs.
 
 Use `--help` on any command to see all arguments.
 
+For model training and labeled testing/evaluation notes, see [`TRAINING_AND_TESTING.md`](TRAINING_AND_TESTING.md).
+
 ## Labels
 
 Stable label IDs live in `src/gene_ig_identify/labels.py`.
