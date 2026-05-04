@@ -2,7 +2,7 @@
 
 These instructions retrain the graph model from scratch using an already-built labeled graph dataset.
 
-Run all commands from the repository root, the folder that contains `pyproject.toml`, `src/`, and `input_data.xlsx`.
+Run all commands from the repository root, the folder that contains `pyproject.toml`, `src/`, and `input_data.xlsx`. Relative paths such as `results/graphs/training_testing_graphs.pt` are resolved from this folder.
 
 ## Files Used
 
@@ -10,16 +10,16 @@ You should have these files available:
 
 ```text
 input_data.xlsx
-training_testing_graphs.pt
-training_testing_graph_lookup.pt
+results/graphs/training_testing_graphs.pt
+results/graphs/training_testing_graph_lookup.pt
 ```
 
 Use `input_data.xlsx`, not `input_data.xlxs`. The code supports `.xlsx`, `.xls`, `.csv`, `.tsv`, and `.txt`.
 
 The `.pt` files are the actual training inputs:
 
-- `training_testing_graphs.pt`: list of graph objects.
-- `training_testing_graph_lookup.pt`: lookup of graph names to graph objects. The training workflow uses this lookup for splitting and training.
+- `results/graphs/training_testing_graphs.pt`: list of graph objects.
+- `results/graphs/training_testing_graph_lookup.pt`: lookup of graph names to graph objects. The training workflow uses this lookup for splitting and training.
 - `input_data.xlsx`: original row table used later for prediction-style testing and row-preserving output.
 
 Each graph used for training must include a label from the stable mapping:
@@ -63,8 +63,8 @@ Before a long run, you can check that the graph files load and the training comm
 
 ```bash
 gene-ig-identify train \
-  --graphs-file training_testing_graphs.pt \
-  --graph-lookup-file training_testing_graph_lookup.pt \
+  --graphs-file results/graphs/training_testing_graphs.pt \
+  --graph-lookup-file results/graphs/training_testing_graph_lookup.pt \
   --output-dir results/models_smoke_test \
   --epochs 2 \
   --trials 1
@@ -78,8 +78,8 @@ To keep the previous model, train into a fresh output directory:
 
 ```bash
 gene-ig-identify train \
-  --graphs-file training_testing_graphs.pt \
-  --graph-lookup-file training_testing_graph_lookup.pt \
+  --graphs-file results/graphs/training_testing_graphs.pt \
+  --graph-lookup-file results/graphs/training_testing_graph_lookup.pt \
   --output-dir results/models_from_scratch \
   --epochs 100 \
   --trials 30
@@ -89,8 +89,8 @@ To replace the default model used by prediction, write directly to `results/mode
 
 ```bash
 gene-ig-identify train \
-  --graphs-file training_testing_graphs.pt \
-  --graph-lookup-file training_testing_graph_lookup.pt \
+  --graphs-file results/graphs/training_testing_graphs.pt \
+  --graph-lookup-file results/graphs/training_testing_graph_lookup.pt \
   --output-dir results/models \
   --epochs 100 \
   --trials 30
@@ -98,7 +98,7 @@ gene-ig-identify train \
 
 The training workflow does the following:
 
-1. Loads labeled graphs from `training_testing_graph_lookup.pt`.
+1. Loads labeled graphs from `results/graphs/training_testing_graph_lookup.pt`.
 2. Creates a stratified held-out test split.
 3. Runs Optuna hyperparameter tuning with stratified 5-fold cross-validation on the remaining graphs.
 4. Trains a final model from scratch using the best hyperparameters.
@@ -166,7 +166,7 @@ You can also run the trained model across the full original table for a row-by-r
 
 ```bash
 gene-ig-identify predict dataset \
-  --graphs-file training_testing_graphs.pt \
+  --graphs-file results/graphs/training_testing_graphs.pt \
   --excel-file input_data.xlsx \
   --model-dir results/models_from_scratch \
   --output-dir output
@@ -185,7 +185,7 @@ If you trained into `results/models`, use:
 
 ```bash
 gene-ig-identify predict dataset \
-  --graphs-file training_testing_graphs.pt \
+  --graphs-file results/graphs/training_testing_graphs.pt \
   --excel-file input_data.xlsx \
   --model-dir results/models \
   --output-dir output
@@ -217,4 +217,4 @@ Rows predicted as `Other` are low-confidence predictions below the configured co
 - Increase `--trials` for a broader hyperparameter search.
 - Increase `--epochs` for longer final training.
 - If training fails with a stratification error, check class counts in the graph dataset and add more labeled examples for the smallest class.
-- If `predict dataset` reports row alignment problems, make sure `training_testing_graphs.pt` was built from the same `input_data.xlsx` rows and label values.
+- If `predict dataset` reports row alignment problems, make sure `results/graphs/training_testing_graphs.pt` was built from the same `input_data.xlsx` rows and label values.
