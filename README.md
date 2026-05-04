@@ -28,7 +28,26 @@ results/
 
 ## Install
 
-Python 3.11 is recommended.
+Python 3.11 or newer is required. Check whether it is already installed:
+
+```bash
+python3.11 --version
+```
+
+If `python3.11` is not available, install it first. On macOS with Homebrew:
+
+```bash
+brew install python@3.11
+```
+
+With conda or mamba, replacing `conda` with `mamba` if needed:
+
+```bash
+conda create -n gene-ig-identify-python python=3.11
+conda activate gene-ig-identify-python
+```
+
+Then clone and install the project. If you installed Python with Homebrew or another system package manager, create the project venv:
 
 ```bash
 git clone https://github.com/umeshkhaniya/gene-ig-identify.git
@@ -38,6 +57,31 @@ source gene-ig-identify-venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e .
 ```
+
+If you are using the activated conda environment, install directly inside it:
+
+```bash
+git clone https://github.com/umeshkhaniya/gene-ig-identify.git
+cd gene-ig-identify
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+On NIH Biowulf, use the Python module instead of installing Python yourself:
+
+```bash
+module -t avail python
+module load python/3.11
+python --version
+git clone https://github.com/umeshkhaniya/gene-ig-identify.git
+cd gene-ig-identify
+python -m venv --system-site-packages /data/$USER/gene-ig-identify-venv
+source /data/$USER/gene-ig-identify-venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+If `/data/$USER` is not available for your account, create the venv in another writable project or data directory. The `--system-site-packages` option lets the venv see packages from Biowulf's loaded Python module. For long ESM/model runs, use an interactive or batch compute job rather than running on the login node.
 
 Important dependency notes:
 
