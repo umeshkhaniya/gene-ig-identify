@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gene-ig-identify"
+version = "0.1.0"
+description = "Portable CLI and package for immunoglobulin domain feature generation, graph construction, training, and prediction."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Khaniyau" }
+]
+dependencies = [
+  "biopython",
+  "fair-esm",
+  "h5py",
+  "matplotlib",
+  "numpy",
+  "openpyxl",
+  "optuna",
+  "pandas",
+  "pyyaml",
+  "requests",
+  "scikit-learn",
+  "seaborn",
+  "torch",
+  "torch-geometric"
+]
+
+[project.scripts]
+gene-ig-identify = "gene_ig_identify.cli:main"
+gene-ig-create-graphs = "gene_ig_identify.scripts.create_graphs:main"
+gene-ig-create-sequences = "gene_ig_identify.scripts.create_sequences:main"
+gene-ig-create-esm-embeddings = "gene_ig_identify.scripts.create_esm_embeddings:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+gene_ig_identify = ["integrations/js/*.js"]

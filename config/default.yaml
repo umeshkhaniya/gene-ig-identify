@@ -1,0 +1,28 @@
+runtime:
+  target: biowulf
+  device: auto
+  log_level: INFO
+
+paths:
+  input_dir: input
+  output_dir: output
+  artifacts_dir: results
+  models_dir: results/models
+  pdb_dir: input/pdb_files
+  icn3dss_dir: input/icn3dss
+  sequence_dir: input/sequence_file
+  structure_features_dir: input/structure_features_residues
+  icn3d_interactions_dir: input/icn3d_interactions
+  cdd_annotation_dir: input/cdd_annotation
+  esm_cache_dir: ""
+
+executables:
+  node: node
+  icn3d_secondary_structure_script: src/gene_ig_identify/integrations/js/secondarystructure2.js
+  icn3d_sequence_script: src/gene_ig_identify/integrations/js/get_sequence_icn3d.js
+  icn3d_interaction_script: src/gene_ig_identify/integrations/js/interactiondetail.js
+
+model:
+  node_feature_dim: 1320
+  edge_feature_dim: 8
+  default_confidence_threshold: 0.5
