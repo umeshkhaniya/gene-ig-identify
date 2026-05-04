@@ -257,6 +257,8 @@ gene-ig-identify sequences extract --input-table input/new_domains.xlsx --output
 gene-ig-identify embeddings esm --input-file output/new_domain_sequences.pkl.gz --output-file output/new_domain_esm_embeddings.h5 --cache-dir /data/$USER/gene-ig-identify-esm-cache
 gene-ig-identify graphs build --input-table input/new_domains.xlsx --embeddings-file output/new_domain_esm_embeddings.h5 --graphs-output results/graphs/new_domain_graphs.pt --graph-lookup-output results/graphs/new_domain_graph_lookup.pt
 gene-ig-identify predict dataset --graphs-file results/graphs/new_domain_graphs.pt --excel-file input/new_domains.xlsx --model-dir results/models --output-dir output
+python -m gene_ig_identify.scripts.evaluate_test_graphs --model-dir results/models --test-graphs results/models/test_graphs.pt --test-labels results/models/test_labels.pt
+python -m gene_ig_identify.scripts.evaluate_prediction_excel --predictions-file output/input_data_with_predictions.xlsx
 ```
 
 Use `--help` on any command to see all arguments.

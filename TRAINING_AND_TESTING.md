@@ -153,7 +153,7 @@ Use `final_test_accuracy` as the main test metric, because those graphs were not
 To create a readable prediction table from `results/models/test_graphs.pt`, run:
 
 ```bash
-python src/evaluate_test_graphs.py \
+python -m gene_ig_identify.scripts.evaluate_test_graphs \
   --model-dir results/models \
   --test-graphs results/models/test_graphs.pt \
   --test-labels results/models/test_labels.pt
@@ -192,7 +192,7 @@ This full-table test is useful for inspection, but it is not an independent held
 After running `predict dataset`, calculate label agreement with the `ig_type` column:
 
 ```bash
-python src/evaluate_prediction_excel.py \
+python -m gene_ig_identify.scripts.evaluate_prediction_excel \
   --predictions-file output/input_data_with_predictions.xlsx
 ```
 
