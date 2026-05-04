@@ -31,6 +31,8 @@ results/
 Python 3.11 is recommended.
 
 ```bash
+git clone https://github.com/umeshkhaniya/gene-ig-identify.git
+cd gene-ig-identify
 python3.11 -m venv gene-ig-identify-venv
 source gene-ig-identify-venv/bin/activate
 python -m pip install --upgrade pip
