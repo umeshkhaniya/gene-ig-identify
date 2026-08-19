@@ -1,15 +1,31 @@
-"""Centralized stable label mapping."""
+"""Utilities for creating label mappings."""
 
-LABEL_MAPPING = {
-    "IgV": 0,
-    "IgC1": 1,
-    "IgC2": 2,
-    "IgI": 3,
-    "Cadherin": 4,
-    "IgFN3": 5,
-    "Lamin": 6,
-    "CD19": 7,
-}
+from typing import Sequence
 
-REVERSE_LABEL_MAPPING = {value: key for key, value in LABEL_MAPPING.items()}
 
+def build_label_mapping(labels: Sequence[str]) -> dict[str, int]:
+    """Create a label to integer mapping."""
+    return {label: index for index, label in enumerate(labels)}
+
+
+def build_reverse_label_mapping(
+    label_mapping: dict[str, int],
+) -> dict[int, str]:
+    """Create an integer to label mapping."""
+    return {value: key for key, value in label_mapping.items()}
+
+
+DEFAULT_LABELS = [
+    "IgV",
+    "IgC1",
+    "IgC2",
+    "IgI",
+    "Cadherin",
+    "IgFN3",
+    "Lamin",
+    "CD19",
+]
+
+LABEL_MAPPING = build_label_mapping(DEFAULT_LABELS)
+
+REVERSE_LABEL_MAPPING = build_reverse_label_mapping(LABEL_MAPPING)
