@@ -1,0 +1,19 @@
+{
+  "best_params": {
+    "hidden_dim": 128,
+    "dropout": 0.4402910206224737,
+    "lr": 0.00011248613366724776,
+    "weight_decay": 5.085469541366334e-05,
+    "batch_size": 128,
+    "num_layers": 2
+  },
+  "node_features": 1320,
+  "edge_in_channels_features": 8,
+  "edge_in_channels_featutes": 8,
+  "num_classes": 8,
+  "cv_folds": 5,
+  "test_accuracy": 0.9849624060150376,
+  "best_epoch": 22,
+  "best_validation_loss": 0.162968710064888,
+  "best_validation_accuracy": 0.9622641509433962
+}

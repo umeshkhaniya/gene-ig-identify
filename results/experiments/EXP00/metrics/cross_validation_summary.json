@@ -1,0 +1,11 @@
+{
+  "best_value": 0.17725063264369964,
+  "best_trial": 15,
+  "best_mean_cv_accuracy": 0.9565139263252471,
+  "cv_folds": 5,
+  "tuning_epochs_per_fold": 20,
+  "final_test_accuracy": 0.9849624060150376,
+  "best_epoch": 22,
+  "best_validation_loss": 0.162968710064888,
+  "best_validation_accuracy": 0.9622641509433962
+}

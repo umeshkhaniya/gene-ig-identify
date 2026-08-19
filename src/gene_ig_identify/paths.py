@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
+import re
 
 from .config import AppConfig
 
@@ -22,6 +23,32 @@ def get_path(config: AppConfig, key: str) -> Path:
     return resolve_path(config, value)
 
 
+def get_experiment_id(config: AppConfig) -> str:
+    experiment = config.raw.get("experiment", {})
+    experiment_id = str(experiment.get("id", "EXP00")).strip()
+    if not experiment_id:
+        raise ValueError("Missing experiment id in config.")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", experiment_id):
+        raise ValueError(f"Invalid experiment id for output paths: {experiment_id!r}")
+    return experiment_id
+
+
+def get_experiment_dir(config: AppConfig) -> Path:
+    return get_path(config, "artifacts_dir") / "experiments" / get_experiment_id(config)
+
+
+def get_experiment_models_dir(config: AppConfig) -> Path:
+    return get_experiment_dir(config) / "models"
+
+
+def get_experiment_metrics_dir(config: AppConfig) -> Path:
+    return get_experiment_dir(config) / "metrics"
+
+
+def get_experiment_predictions_dir(config: AppConfig) -> Path:
+    return get_experiment_dir(config) / "predictions"
+
+
 def ensure_dir(path: str | Path) -> Path:
     resolved = Path(path)
     resolved.mkdir(parents=True, exist_ok=True)
@@ -38,4 +65,3 @@ def get_scratch_dir() -> Path | None:
         if value:
             return Path(value)
     return None
-

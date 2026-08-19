@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -16,31 +17,65 @@ from torch_geometric.loader import DataLoader
 
 from ..constants import EXPECTED_EDGE_FEATURES, EXPECTED_NODE_FEATURES
 from ..io.artifacts import ensure_artifact_dir, load_torch, save_json, save_torch
-from ..labels import LABEL_MAPPING, REVERSE_LABEL_MAPPING
+from ..labels import label_mapping_from_config, reverse_label_mapping_from_config
 from ..logging_utils import get_logger
 from ..models.dataset_split import set_seed
 from ..models.gine import GraphClassifier
 
 LOGGER = get_logger(__name__)
 
-NUM_CLASSES = len(LABEL_MAPPING)
 CV_FOLDS = 5
 RANDOM_STATE = 42
+
+
+@dataclass(frozen=True)
+class TrainingLabelSpace:
+    label_mapping: dict[str, int]
+    reverse_label_mapping: dict[int, str]
+
+    @property
+    def num_classes(self) -> int:
+        return len(self.label_mapping)
+
+
+def _label_space_from_config(config) -> TrainingLabelSpace:
+    label_mapping = label_mapping_from_config(config)
+    if not label_mapping:
+        raise ValueError("Training requires at least one configured label.")
+    return TrainingLabelSpace(
+        label_mapping=label_mapping,
+        reverse_label_mapping=reverse_label_mapping_from_config(config),
+    )
+
+
+def _model_label_metadata(config, label_space: TrainingLabelSpace) -> dict:
+    experiment = getattr(config, "raw", {}).get("experiment", {})
+    labels = [
+        label_space.reverse_label_mapping[index]
+        for index in range(label_space.num_classes)
+    ]
+    return {
+        "experiment": experiment.get("id", ""),
+        "name": experiment.get("name", ""),
+        "labels": labels,
+        "label_mapping": label_space.label_mapping,
+        "num_classes": label_space.num_classes,
+    }
 
 
 def _graph_labels(graphs) -> list[int]:
     return [int(data.y.item()) for data in graphs]
 
 
-def _validate_labeled_graphs(graphs, source: Path) -> None:
+def _validate_labeled_graphs(graphs, source: Path, num_classes: int) -> None:
     if not isinstance(graphs, list) or not graphs:
         raise ValueError(f"Expected a non-empty list of graphs in {source}.")
     missing_labels = [idx for idx, data in enumerate(graphs) if not hasattr(data, "y") or data.y is None]
     if missing_labels:
         raise ValueError("Training requires labeled graphs. Add an ig_type column before graph creation.")
-    invalid_labels = sorted({label for label in _graph_labels(graphs) if label < 0 or label >= NUM_CLASSES})
+    invalid_labels = sorted({label for label in _graph_labels(graphs) if label < 0 or label >= num_classes})
     if invalid_labels:
-        raise ValueError(f"Graph labels outside stable {NUM_CLASSES}-class mapping: {invalid_labels}")
+        raise ValueError(f"Graph labels outside configured {num_classes}-class mapping: {invalid_labels}")
     missing_attrs = [
         idx
         for idx, data in enumerate(graphs)
@@ -88,11 +123,11 @@ def _graph_names(graphs, source: Path) -> list[str]:
     return names
 
 
-def _validate_graph_lookup(graph_lookup, graph_lookup_file: Path, graph_names: list[str]) -> list:
+def _validate_graph_lookup(graph_lookup, graph_lookup_file: Path, graph_names: list[str], num_classes: int) -> list:
     if not isinstance(graph_lookup, dict) or not graph_lookup:
         raise ValueError(f"Expected a non-empty graph lookup dictionary in {graph_lookup_file}.")
     lookup_graphs = list(graph_lookup.values())
-    _validate_labeled_graphs(lookup_graphs, graph_lookup_file)
+    _validate_labeled_graphs(lookup_graphs, graph_lookup_file, num_classes)
     lookup_names = _graph_names(lookup_graphs, graph_lookup_file)
     lookup_keys = [str(key) for key in graph_lookup]
     if Counter(lookup_keys) != Counter(lookup_names):
@@ -109,17 +144,18 @@ def _validate_graph_lookup(graph_lookup, graph_lookup_file: Path, graph_names: l
     return lookup_graphs
 
 
-def _warn_missing_classes(labels: list[int]) -> None:
+def _warn_missing_classes(labels: list[int], reverse_label_mapping: dict[int, str]) -> None:
+    num_classes = len(reverse_label_mapping)
     present = set(labels)
-    missing = [idx for idx in range(NUM_CLASSES) if idx not in present]
+    missing = [idx for idx in range(num_classes) if idx not in present]
     if missing:
-        missing_names = [REVERSE_LABEL_MAPPING[idx] for idx in missing]
-        present_names = [REVERSE_LABEL_MAPPING[idx] for idx in sorted(present)]
+        missing_names = [reverse_label_mapping[idx] for idx in missing]
+        present_names = [reverse_label_mapping[idx] for idx in sorted(present)]
         LOGGER.warning(
-            "Training data contains %s/%s stable labels. Present labels: %s. Missing labels: %s. "
+            "Training data contains %s/%s configured labels. Present labels: %s. Missing labels: %s. "
             "Predictions for missing labels may be unreliable.",
             len(present),
-            NUM_CLASSES,
+            num_classes,
             ", ".join(present_names),
             ", ".join(missing_names),
         )
@@ -129,22 +165,22 @@ def _state_dict_cpu_clone(model) -> dict:
     return {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
 
 
-def _class_weights(graphs, device: torch.device) -> torch.Tensor:
+def _class_weights(graphs, device: torch.device, num_classes: int) -> torch.Tensor:
     labels = torch.tensor(_graph_labels(graphs), dtype=torch.long)
-    class_counts = torch.bincount(labels, minlength=NUM_CLASSES).float()
-    class_weights = torch.zeros(NUM_CLASSES, dtype=torch.float)
+    class_counts = torch.bincount(labels, minlength=num_classes).float()
+    class_weights = torch.zeros(num_classes, dtype=torch.float)
     present = class_counts > 0
     class_weights[present] = 1.0 / torch.log1p(class_counts[present])
     class_weights = class_weights / class_weights[present].sum()
     return class_weights.to(device)
 
 
-def _make_model(params: dict, device: torch.device) -> GraphClassifier:
+def _make_model(params: dict, device: torch.device, num_classes: int) -> GraphClassifier:
     return GraphClassifier(
         in_channels=EXPECTED_NODE_FEATURES,
         edge_in_channels=EXPECTED_EDGE_FEATURES,
         hidden_dim=params["hidden_dim"],
-        num_classes=NUM_CLASSES,
+        num_classes=num_classes,
         num_layers=params["num_layers"],
         dropout_rate=params["dropout"],
     ).to(device)
@@ -186,8 +222,8 @@ def _evaluate(model, loader, loss_fn, device: torch.device) -> tuple[float, floa
     return (total_loss / total if total else 0.0, correct / total if total else 0.0)
 
 
-def _validate_five_fold_possible(labels: list[int]) -> None:
-    class_counts = np.bincount(labels, minlength=NUM_CLASSES)
+def _validate_five_fold_possible(labels: list[int], num_classes: int) -> None:
+    class_counts = np.bincount(labels, minlength=num_classes)
     present_counts = class_counts[class_counts > 0]
     if len(present_counts) < 2:
         raise ValueError("Training requires at least two classes.")
@@ -199,9 +235,9 @@ def _validate_five_fold_possible(labels: list[int]) -> None:
         )
 
 
-def _split_train_val_test(graphs: list) -> tuple[list, list, list[int]]:
+def _split_train_val_test(graphs: list, num_classes: int) -> tuple[list, list, list[int]]:
     labels = _graph_labels(graphs)
-    class_counts = np.bincount(labels, minlength=NUM_CLASSES)
+    class_counts = np.bincount(labels, minlength=num_classes)
     present_counts = class_counts[class_counts > 0]
     if len(present_counts) < 2:
         raise ValueError("Training requires at least two classes.")
@@ -221,7 +257,7 @@ def _split_train_val_test(graphs: list) -> tuple[list, list, list[int]]:
     train_val_graphs = [graphs[i] for i in train_val_idx]
     test_graphs = [graphs[i] for i in test_idx]
     test_labels = [labels[i] for i in test_idx]
-    _validate_five_fold_possible(_graph_labels(train_val_graphs))
+    _validate_five_fold_possible(_graph_labels(train_val_graphs), num_classes)
     return train_val_graphs, test_graphs, test_labels
 
 
@@ -237,24 +273,35 @@ def _final_train_validation_split(graphs: list, labels: list[int]) -> tuple[list
     return [graphs[i] for i in train_idx], [graphs[i] for i in val_idx]
 
 
-def run(config, graphs_file: Path, graph_lookup_file: Path, output_dir: Path, epochs: int, trials: int) -> None:
+def run(
+    config,
+    graphs_file: Path,
+    graph_lookup_file: Path,
+    output_dir: Path,
+    epochs: int,
+    trials: int,
+    metrics_dir: Path | None = None,
+) -> None:
     set_seed(RANDOM_STATE)
+    label_space = _label_space_from_config(config)
+    num_classes = label_space.num_classes
     if epochs < 1:
         raise ValueError("--epochs must be at least 1.")
     if trials < 1:
         raise ValueError("--trials must be at least 1.")
     output_dir = ensure_artifact_dir(output_dir)
+    metrics_output_dir = ensure_artifact_dir(metrics_dir) if metrics_dir else output_dir
 
     all_graphs = load_torch(graphs_file)
-    _validate_labeled_graphs(all_graphs, graphs_file)
+    _validate_labeled_graphs(all_graphs, graphs_file, num_classes)
     graph_names = _graph_names(all_graphs, graphs_file)
 
     graph_lookup = load_torch(graph_lookup_file)
-    _validate_graph_lookup(graph_lookup, graph_lookup_file, graph_names)
+    _validate_graph_lookup(graph_lookup, graph_lookup_file, graph_names, num_classes)
     graph_list = all_graphs
-    _warn_missing_classes(_graph_labels(graph_list))
+    _warn_missing_classes(_graph_labels(graph_list), label_space.reverse_label_mapping)
 
-    train_val_graphs, test_graphs, test_labels = _split_train_val_test(graph_list)
+    train_val_graphs, test_graphs, test_labels = _split_train_val_test(graph_list, num_classes)
     save_torch(test_graphs, output_dir / "test_graphs.pt")
     save_torch(test_labels, output_dir / "test_labels.pt")
 
@@ -286,10 +333,10 @@ def run(config, graphs_file: Path, graph_lookup_file: Path, output_dir: Path, ep
             fold_val_graphs = [train_val_graphs[i] for i in val_idx]
             train_loader = DataLoader(fold_train_graphs, batch_size=params["batch_size"], shuffle=True)
             val_loader = DataLoader(fold_val_graphs, batch_size=params["batch_size"], shuffle=False)
-            model = _make_model(params, device)
+            model = _make_model(params, device, num_classes)
             optimizer = optim.AdamW(model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
             scheduler = ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=5)
-            loss_fn = torch.nn.CrossEntropyLoss(weight=_class_weights(fold_train_graphs, device))
+            loss_fn = torch.nn.CrossEntropyLoss(weight=_class_weights(fold_train_graphs, device, num_classes))
             for _ in range(tuning_epochs):
                 _train_epoch(model, train_loader, optimizer, loss_fn, device)
                 val_loss, _ = _evaluate(model, val_loader, loss_fn, device)
@@ -316,10 +363,10 @@ def run(config, graphs_file: Path, graph_lookup_file: Path, output_dir: Path, ep
     batch_size = best_params["batch_size"]
     train_loader = DataLoader(final_train_graphs, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(final_val_graphs, batch_size=batch_size, shuffle=False)
-    model = _make_model(best_params, device)
+    model = _make_model(best_params, device, num_classes)
     optimizer = optim.AdamW(model.parameters(), lr=best_params["lr"], weight_decay=best_params["weight_decay"])
     scheduler = ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=5)
-    loss_fn = torch.nn.CrossEntropyLoss(weight=_class_weights(final_train_graphs, device))
+    loss_fn = torch.nn.CrossEntropyLoss(weight=_class_weights(final_train_graphs, device, num_classes))
 
     train_losses = []
     val_losses = []
@@ -353,10 +400,10 @@ def run(config, graphs_file: Path, graph_lookup_file: Path, output_dir: Path, ep
     save_json(
         {
             "best_params": best_params,
+            **_model_label_metadata(config, label_space),
             "node_features": EXPECTED_NODE_FEATURES,
             "edge_in_channels_features": EXPECTED_EDGE_FEATURES,
             "edge_in_channels_featutes": EXPECTED_EDGE_FEATURES,
-            "num_classes": NUM_CLASSES,
             "cv_folds": CV_FOLDS,
             "test_accuracy": test_acc,
             "best_epoch": best_epoch,
@@ -377,7 +424,7 @@ def run(config, graphs_file: Path, graph_lookup_file: Path, output_dir: Path, ep
             "best_validation_loss": best_val_loss,
             "best_validation_accuracy": best_val_acc,
         },
-        output_dir / "cross_validation_summary.json",
+        metrics_output_dir / "cross_validation_summary.json",
     )
 
     fig, ax1 = plt.subplots(figsize=(10, 6))
@@ -394,5 +441,5 @@ def run(config, graphs_file: Path, graph_lookup_file: Path, output_dir: Path, ep
     fig.legend(loc="upper center", bbox_to_anchor=(0.5, -0.05), ncol=2)
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(output_dir / "loss_accuracy_plot_hybrid.png")
+    plt.savefig(metrics_output_dir / "loss_accuracy_plot_hybrid.png")
     plt.close(fig)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import pickle
+from collections.abc import Mapping
 from pathlib import Path
 
 from Bio.PDB import Polypeptide
@@ -20,7 +21,7 @@ from ..features.secondary_structure import onehot_ss3, read_icn3d_ss
 from ..features.structure_geometry import ResidueAnalyzer
 from ..io.artifacts import save_torch
 from ..io.tables import load_table, normalize_domain_table
-from ..labels import LABEL_MAPPING
+from ..labels import label_mapping_from_config
 from ..logging_utils import get_logger
 
 LOGGER = get_logger(__name__)
@@ -170,7 +171,18 @@ def create_graph_node_edge(input_excel_file, pdb_file_path, icn3dss_path, contac
     return all_graphs, graph_lookup
 
 
-def run(config, input_table: Path, pdb_dir: Path, icn3dss_dir: Path, structure_features_dir: Path, icn3d_interactions_dir: Path, embeddings_file: Path, graphs_output: Path, graph_lookup_output: Path) -> None:
+def run(
+    config,
+    input_table: Path,
+    pdb_dir: Path,
+    icn3dss_dir: Path,
+    structure_features_dir: Path,
+    icn3d_interactions_dir: Path,
+    embeddings_file: Path,
+    graphs_output: Path,
+    graph_lookup_output: Path,
+    label_mapping: Mapping[str, int] | None = None,
+) -> None:
     for required_dir, label in (
         (pdb_dir, "PDB directory"),
         (icn3dss_dir, "ICN3D secondary-structure directory"),
@@ -182,6 +194,7 @@ def run(config, input_table: Path, pdb_dir: Path, icn3dss_dir: Path, structure_f
                 f"{label} not found: {required_dir}. Place the prerequisite files in this folder before running "
                 f"`gene-ig-identify graphs build`."
             )
+    active_label_mapping = dict(label_mapping) if label_mapping is not None else label_mapping_from_config(config)
     all_graphs, graph_lookup = create_graph_node_edge(
         input_table,
         f"{pdb_dir}/",
@@ -189,7 +202,7 @@ def run(config, input_table: Path, pdb_dir: Path, icn3dss_dir: Path, structure_f
         f"{structure_features_dir}/",
         f"{icn3d_interactions_dir}/",
         embeddings_file,
-        LABEL_MAPPING,
+        active_label_mapping,
     )
     save_torch(all_graphs, graphs_output)
     save_torch(graph_lookup, graph_lookup_output)

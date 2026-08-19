@@ -3,6 +3,20 @@ runtime:
   device: auto
   log_level: INFO
 
+experiment:
+  id: EXP00
+  name: 8class_baseline
+
+labels:
+  - IgV
+  - IgC1
+  - IgC2
+  - IgI
+  - Cadherin
+  - IgFN3
+  - Lamin
+  - CD19
+
 paths:
   input_dir: input
   output_dir: output

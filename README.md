@@ -7,6 +7,8 @@ The active workflow lives under `src/`.
 ## Repository Layout
 
 ```text
+docs/
+  experiments.md                   # EXP00/EXP01/EXP02 definitions and artifact layout
 src/
   create_graphs.py                 # graph-building script
   create_sequences.py              # per-domain sequence extraction script
@@ -22,8 +24,22 @@ src/
     workflows/
 config/
   default.yaml                     # default paths and runtime settings
+  experiments/                     # experiment-specific label spaces
 results/
-  models/                          # reusable prediction model artifacts
+  models/                          # legacy EXP00 model artifacts
+  experiments/
+    EXP00/
+      models/                      # organized EXP00 baseline model artifacts
+      metrics/
+      predictions/
+    EXP01/
+      models/
+      metrics/
+      predictions/
+    EXP02/
+      models/
+      metrics/
+      predictions/
 ```
 
 ## Install
@@ -106,6 +122,30 @@ Required columns:
 Use the exact column name `igdomain_res_range`.
 
 For prediction, `ig_type` can be omitted because it is the value the model predicts. For training, include `ig_type`.
+
+## Experiments
+
+The project defines three experiment label spaces. The selected configuration
+file controls the experiment ID, experiment name, and ordered label list.
+
+```text
+EXP00: 8class_baseline
+  IgV, IgC1, IgC2, IgI, Cadherin, IgFN3, Lamin, CD19
+
+EXP01: 11class_expanded
+  EXP00 labels plus IgE, IgFN3-like, SOD
+
+EXP02: 7class_no_CD19
+  EXP00 labels with CD19 removed
+```
+
+The default configuration is EXP00. The existing trained EXP00 baseline is
+available at `results/experiments/EXP00/models/`; the legacy
+`results/models/` location is also preserved for backward compatibility.
+
+Detailed label mappings, model metadata behavior, result directories, and
+prediction/evaluation distinctions are documented in
+[`docs/experiments.md`](docs/experiments.md).
 
 ## Predict New Ig Domains
 
@@ -200,27 +240,33 @@ python src/create_graphs.py \
 Predict labels with the saved model:
 
 ```bash
-gene-ig-identify predict dataset \
+gene-ig-identify --config config/experiments/exp00_8class.yaml predict dataset \
   --graphs-file results/graphs/new_domain_graphs.pt \
-  --excel-file input/new_domains.xlsx \
-  --model-dir results/models \
-  --output-dir output
+  --excel-file input/new_domains.xlsx
 ```
 
 Prediction outputs:
 
 ```text
-output/new_domains_with_predictions.xlsx
-output/new_domains_prediction_details.xlsx
+results/experiments/EXP00/predictions/new_domains_with_predictions.xlsx
+results/experiments/EXP00/predictions/new_domains_prediction_details.xlsx
 ```
 
 The model directory must contain:
 
 ```text
-results/models/best_graph_model.pth
-results/models/best_hyperparameters.json
-results/models/model_config.json
+results/experiments/EXP00/models/best_graph_model.pth
+results/experiments/EXP00/models/best_hyperparameters.json
+results/experiments/EXP00/models/model_config.json
 ```
+
+To use the preserved legacy baseline location explicitly, pass
+`--model-dir results/models`. Prediction behavior is the same because older
+EXP00 artifacts remain readable.
+
+The prediction workflow uses the label mapping saved with the loaded model.
+For low-confidence predictions, the existing threshold rule is unchanged:
+probability below `0.5` is reported as `Other`. `Other` is not a trained class.
 
 ## Expected Feature Files
 
@@ -256,9 +302,9 @@ gene-ig-identify features structures --input-table input/new_domains.xlsx --inpu
 gene-ig-identify sequences extract --input-table input/new_domains.xlsx --output-file output/new_domain_sequences.pkl.gz
 gene-ig-identify embeddings esm --input-file output/new_domain_sequences.pkl.gz --output-file output/new_domain_esm_embeddings.h5 --cache-dir /data/$USER/gene-ig-identify-esm-cache
 gene-ig-identify graphs build --input-table input/new_domains.xlsx --embeddings-file output/new_domain_esm_embeddings.h5 --graphs-output results/graphs/new_domain_graphs.pt --graph-lookup-output results/graphs/new_domain_graph_lookup.pt
-gene-ig-identify predict dataset --graphs-file results/graphs/new_domain_graphs.pt --excel-file input/new_domains.xlsx --model-dir results/models --output-dir output
-python -m gene_ig_identify.scripts.evaluate_test_graphs --model-dir results/models --test-graphs results/models/test_graphs.pt --test-labels results/models/test_labels.pt
-python -m gene_ig_identify.scripts.evaluate_prediction_excel --predictions-file output/input_data_with_predictions.xlsx
+gene-ig-identify --config config/experiments/exp00_8class.yaml predict dataset --graphs-file results/graphs/new_domain_graphs.pt --excel-file input/new_domains.xlsx
+python -m gene_ig_identify.scripts.evaluate_test_graphs --help
+python -m gene_ig_identify.scripts.evaluate_prediction_excel --predictions-file results/experiments/EXP00/predictions/input_data_with_predictions.xlsx
 ```
 
 Use `--help` on any command to see all arguments.
@@ -267,26 +313,30 @@ For model training and labeled testing/evaluation notes, see [`TRAINING_AND_TEST
 
 ## Labels
 
-Stable label IDs live in `src/gene_ig_identify/labels.py`.
+Label spaces are configuration driven. EXP00 remains the default 8-class
+baseline and is still exposed through `LABEL_MAPPING` and
+`REVERSE_LABEL_MAPPING` for backward compatibility. EXP01 and EXP02 use their
+own ordered label lists from `config/experiments/`.
 
-```python
-LABEL_MAPPING = {
-    "IgV": 0,
-    "IgC1": 1,
-    "IgC2": 2,
-    "IgI": 3,
-    "Cadherin": 4,
-    "IgFN3": 5,
-    "Lamin": 6,
-    "CD19": 7,
-}
-```
+Rows with labels outside the selected experiment mapping are skipped during
+labeled graph generation. Training validates that graph labels fit the selected
+experiment label space.
 
-Rows with labels outside this mapping are skipped during labeled graph generation and training.
+`Other` is not part of any model label mapping. It is only a prediction-time
+output used when the maximum class probability is below the existing `0.5`
+confidence threshold.
 
 ## Configuration
 
 Default paths live in `config/default.yaml`.
+
+Experiment configs live in:
+
+```text
+config/experiments/exp00_8class.yaml
+config/experiments/exp01_12class.yaml
+config/experiments/exp02_7class.yaml
+```
 
 You can override them with:
 

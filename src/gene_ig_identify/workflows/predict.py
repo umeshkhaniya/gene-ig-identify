@@ -10,7 +10,6 @@ from ..constants import DEFAULT_CONFIDENCE_THRESHOLD
 from ..io.artifacts import ensure_artifact_dir, load_torch
 from ..io.excel import prediction_output_path, write_excel
 from ..io.tables import load_table, normalize_domain_table
-from ..labels import REVERSE_LABEL_MAPPING
 from ..logging_utils import get_logger
 
 LOGGER = get_logger(__name__)
@@ -44,22 +43,23 @@ def _optional_string(value) -> str | None:
     return text
 
 
-def _expected_graph_name(row: pd.Series) -> str | None:
+def _expected_graph_names(row: pd.Series) -> set[str]:
     if pd.isna(row.get("igdomain_res_range")):
-        return None
+        return set()
     begin_res, end_res = str(row["igdomain_res_range"]).split("_")
     template_name = _optional_string(row.get("refpdbname"))
     ig_type = _optional_string(row.get("ig_type"))
     parts = [row["pdb"], row["chainid"], begin_res, end_res]
     if template_name:
         parts.append(template_name)
+    expected_names = {"_".join(parts)}
     if ig_type:
-        parts.append(ig_type)
-    return "_".join(parts)
+        expected_names.add("_".join([*parts, ig_type]))
+    return expected_names
 
 
 def run_excel_predictions(config, graphs_file: Path, excel_file: Path, model_dir: Path, output_dir: Path) -> Path:
-    from ..models.inference import load_model, predict_graphs, resolve_device
+    from ..models.inference import load_model_artifacts, predict_graphs, resolve_device
 
     output_dir = ensure_artifact_dir(output_dir)
     _validate_model_artifacts(model_dir)
@@ -76,8 +76,9 @@ def run_excel_predictions(config, graphs_file: Path, excel_file: Path, model_dir
     if len(graphs) != len(normalized_df):
         raise ValueError(f"Row alignment issue: {len(normalized_df)} Excel rows but {len(graphs)} graph entries.")
     device = resolve_device(str(config.runtime.get("device", "auto")))
-    model, best_params = load_model(model_dir, device)
+    model, best_params, label_space = load_model_artifacts(model_dir, device)
     all_preds, all_probs, _, graph_names = predict_graphs(graphs, model, best_params["batch_size"], device)
+    reverse_label_mapping = label_space.reverse_label_mapping
     result_df = excel_df.copy()
     predicted_labels = []
     predicted_ids = []
@@ -86,27 +87,31 @@ def run_excel_predictions(config, graphs_file: Path, excel_file: Path, model_dir
     for idx, graph_name in enumerate(graph_names):
         if hasattr(graphs[idx], "source_row_index") and int(graphs[idx].source_row_index) != idx:
             raise ValueError("Row alignment issue: graph source_row_index does not match Excel row order.")
-        expected_graph_name = _expected_graph_name(normalized_df.iloc[idx])
-        if expected_graph_name and graph_name != expected_graph_name:
+        expected_graph_names = _expected_graph_names(normalized_df.iloc[idx])
+        if expected_graph_names and graph_name not in expected_graph_names:
             raise ValueError(
                 "Row alignment issue: graph order does not match Excel row order at "
-                f"row {idx}. Expected {expected_graph_name}, got {graph_name}."
+                f"row {idx}. Expected one of {sorted(expected_graph_names)}, got {graph_name}."
             )
         top_idx = int(all_preds[idx])
         confidence = float(all_probs[idx][top_idx])
-        predicted_label = REVERSE_LABEL_MAPPING[top_idx]
+        predicted_label = reverse_label_mapping[top_idx]
         if confidence < float(config.model.get("default_confidence_threshold", DEFAULT_CONFIDENCE_THRESHOLD)):
             predicted_label = "Other"
         predicted_labels.append(predicted_label)
         predicted_ids.append(top_idx)
         confidences.append(confidence)
-        prediction_rows.append({
+        prediction_row = {
             "row_index": idx,
             "graph_name": graph_name,
             "predicted_label": predicted_label,
             "predicted_class_id": top_idx,
             "prediction_confidence": confidence,
-        })
+        }
+        true_label = _optional_string(normalized_df.iloc[idx].get("ig_type"))
+        if true_label:
+            prediction_row["true_label"] = true_label
+        prediction_rows.append(prediction_row)
     result_df["predicted_label"] = predicted_labels
     result_df["predicted_class_id"] = predicted_ids
     result_df["prediction_confidence"] = confidences

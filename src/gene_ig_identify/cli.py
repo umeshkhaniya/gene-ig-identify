@@ -8,7 +8,13 @@ from pathlib import Path
 from .config import load_config
 from .labels import LABEL_MAPPING
 from .logging_utils import configure_logging
-from .paths import get_path, resolve_path
+from .paths import (
+    get_experiment_metrics_dir,
+    get_experiment_models_dir,
+    get_experiment_predictions_dir,
+    get_path,
+    resolve_path,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -171,9 +177,10 @@ def main() -> None:
             config,
             graphs_file=Path(args.graphs_file),
             graph_lookup_file=Path(args.graph_lookup_file),
-            output_dir=resolve_path(config, args.output_dir) if args.output_dir else get_path(config, "models_dir"),
+            output_dir=resolve_path(config, args.output_dir) if args.output_dir else get_experiment_models_dir(config),
             epochs=args.epochs,
             trials=args.trials,
+            metrics_dir=None if args.output_dir else get_experiment_metrics_dir(config),
         )
     elif args.command == "predict" and args.predict_command == "dataset":
         from .workflows import predict
@@ -182,8 +189,8 @@ def main() -> None:
             config,
             graphs_file=Path(args.graphs_file),
             excel_file=Path(args.excel_file),
-            model_dir=resolve_path(config, args.model_dir) if args.model_dir else get_path(config, "models_dir"),
-            output_dir=resolve_path(config, args.output_dir) if args.output_dir else get_path(config, "output_dir"),
+            model_dir=resolve_path(config, args.model_dir) if args.model_dir else get_experiment_models_dir(config),
+            output_dir=resolve_path(config, args.output_dir) if args.output_dir else get_experiment_predictions_dir(config),
         )
     elif args.command == "postprocess" and args.postprocess_command == "merge":
         from .workflows import postprocess

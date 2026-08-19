@@ -109,41 +109,59 @@ def _classification_report_table(report: dict) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index("label")
 
 
+def _experiment_root_from_model_dir(model_dir: Path) -> Path | None:
+    if model_dir.name == "models" and model_dir.parent.parent.name == "experiments":
+        return model_dir.parent
+    return None
+
+
+def _default_predictions_dir(model_dir: Path) -> Path:
+    experiment_root = _experiment_root_from_model_dir(model_dir)
+    return experiment_root / "predictions" if experiment_root else model_dir
+
+
+def _default_metrics_dir(model_dir: Path) -> Path:
+    experiment_root = _experiment_root_from_model_dir(model_dir)
+    return experiment_root / "metrics" if experiment_root else model_dir
+
+
 def main(argv: list[str] | None = None) -> None:
     from gene_ig_identify.io.artifacts import load_torch
-    from gene_ig_identify.labels import REVERSE_LABEL_MAPPING
-    from gene_ig_identify.models.inference import load_model, predict_graphs, resolve_device
+    from gene_ig_identify.models.inference import load_model_artifacts, predict_graphs, resolve_device
 
     args = build_parser().parse_args(argv)
     model_dir = Path(args.model_dir)
     test_graphs_file = Path(args.test_graphs) if args.test_graphs else model_dir / "test_graphs.pt"
     test_labels_file = Path(args.test_labels) if args.test_labels else model_dir / "test_labels.pt"
-    output_csv = Path(args.output_csv) if args.output_csv else model_dir / "heldout_test_predictions.csv"
-    output_excel = Path(args.output_excel) if args.output_excel else model_dir / "heldout_test_predictions.xlsx"
+    predictions_dir = _default_predictions_dir(model_dir)
+    metrics_dir = _default_metrics_dir(model_dir)
+    output_csv = Path(args.output_csv) if args.output_csv else predictions_dir / "heldout_test_predictions.csv"
+    output_excel = Path(args.output_excel) if args.output_excel else predictions_dir / "heldout_test_predictions.xlsx"
     report_csv = (
         Path(args.classification_report_csv)
         if args.classification_report_csv
-        else model_dir / "heldout_classification_report.csv"
+        else metrics_dir / "heldout_classification_report.csv"
     )
     report_excel = (
         Path(args.classification_report_excel)
         if args.classification_report_excel
-        else model_dir / "heldout_classification_report.xlsx"
+        else metrics_dir / "heldout_classification_report.xlsx"
     )
     matrix_csv = (
         Path(args.confusion_matrix_csv)
         if args.confusion_matrix_csv
-        else model_dir / "heldout_confusion_matrix.csv"
+        else metrics_dir / "heldout_confusion_matrix.csv"
     )
     matrix_excel = (
         Path(args.confusion_matrix_excel)
         if args.confusion_matrix_excel
-        else model_dir / "heldout_confusion_matrix.xlsx"
+        else metrics_dir / "heldout_confusion_matrix.xlsx"
     )
 
     graphs = load_torch(test_graphs_file)
     device = resolve_device(args.device)
-    model, best_params = load_model(model_dir, device)
+    model, best_params, label_space = load_model_artifacts(model_dir, device)
+    reverse_label_mapping = label_space.reverse_label_mapping
     preds, probs, graph_labels, graph_names = predict_graphs(
         graphs,
         model,
@@ -163,9 +181,9 @@ def main(argv: list[str] | None = None) -> None:
             {
                 "graph_name": graph_names[idx],
                 "true_class_id": true_id,
-                "true_label": REVERSE_LABEL_MAPPING[true_id],
+                "true_label": reverse_label_mapping[true_id],
                 "predicted_class_id": pred_id,
-                "predicted_label": REVERSE_LABEL_MAPPING[pred_id],
+                "predicted_label": reverse_label_mapping[pred_id],
                 "prediction_confidence": float(probs[idx][pred_id]),
                 "correct": pred_id == true_id,
             }
@@ -174,7 +192,7 @@ def main(argv: list[str] | None = None) -> None:
     df = pd.DataFrame(rows)
     accuracy = df["correct"].mean()
     labels = sorted(set(df["true_class_id"]) | set(df["predicted_class_id"]))
-    label_names = [REVERSE_LABEL_MAPPING[label] for label in labels]
+    label_names = [reverse_label_mapping[label] for label in labels]
     report = classification_report(
         df["true_class_id"],
         df["predicted_class_id"],

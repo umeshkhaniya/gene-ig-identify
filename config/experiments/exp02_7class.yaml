@@ -1,0 +1,12 @@
+experiment:
+  id: EXP02
+  name: 7class_no_CD19
+
+labels:
+  - IgV
+  - IgC1
+  - IgC2
+  - IgI
+  - Cadherin
+  - IgFN3
+  - Lamin

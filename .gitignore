@@ -30,3 +30,14 @@ results/**/*.json
 !results/models/*.json
 !results/models/*.pth
 !results/models/*.png
+!results/experiments/
+!results/experiments/EXP00/
+!results/experiments/EXP00/models/
+!results/experiments/EXP00/models/*.json
+!results/experiments/EXP00/models/*.pth
+!results/experiments/EXP00/metrics/
+!results/experiments/EXP00/metrics/*.json
+!results/experiments/EXP00/metrics/*.csv
+!results/experiments/EXP00/metrics/*.png
+!results/experiments/EXP00/predictions/
+!results/experiments/EXP00/predictions/*.csv
