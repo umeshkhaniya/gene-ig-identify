@@ -153,7 +153,7 @@ class GraphBuildingLabelMappingTests(unittest.TestCase):
 
     def test_exp01_graph_generation_encodes_new_labels(self):
         new_labels = ["IgE", "IgFN3-like", "SOD"]
-        exp01_mapping = self.load_experiment_mapping("exp01_12class.yaml")
+        exp01_mapping = self.load_experiment_mapping("exp01_11class.yaml")
 
         with TemporaryDirectory() as tmp_dir:
             paths = create_minimal_graph_inputs(Path(tmp_dir), new_labels)
@@ -220,7 +220,7 @@ class GraphBuildingLabelMappingTests(unittest.TestCase):
         self.assertEqual(save_torch.call_count, 2)
 
     def test_graph_cli_passes_selected_exp01_config_to_graph_building(self):
-        config_path = self.project_root / "config" / "experiments" / "exp01_12class.yaml"
+        config_path = self.project_root / "config" / "experiments" / "exp01_11class.yaml"
         argv = [
             "gene-ig-identify",
             "--config",
@@ -313,7 +313,7 @@ class GraphBuildingLabelMappingTests(unittest.TestCase):
                 )
                 row_index += 1
 
-        exp01_mapping = self.load_experiment_mapping("exp01_12class.yaml")
+        exp01_mapping = self.load_experiment_mapping("exp01_11class.yaml")
 
         with TemporaryDirectory() as tmp_dir:
             table_path = Path(tmp_dir) / "master.csv"
@@ -329,7 +329,7 @@ class GraphBuildingLabelMappingTests(unittest.TestCase):
         self.assertEqual(summary.unsupported_labels, {})
 
     def test_run_detects_graph_count_mismatch(self):
-        config = load_config(self.project_root / "config" / "experiments" / "exp01_12class.yaml")
+        config = load_config(self.project_root / "config" / "experiments" / "exp01_11class.yaml")
 
         with TemporaryDirectory() as tmp_dir:
             paths = create_minimal_graph_inputs(Path(tmp_dir), ["IgE", "IgFN3-like", "SOD"])

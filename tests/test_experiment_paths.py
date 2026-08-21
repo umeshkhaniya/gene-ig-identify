@@ -40,7 +40,7 @@ class ExperimentPathTests(unittest.TestCase):
     def test_experiment_root_paths_are_config_driven(self):
         for filename, experiment_id in (
             ("exp00_8class.yaml", "EXP00"),
-            ("exp01_12class.yaml", "EXP01"),
+            ("exp01_11class.yaml", "EXP01"),
             ("exp02_7class.yaml", "EXP02"),
         ):
             with self.subTest(filename=filename):
@@ -56,7 +56,7 @@ class ExperimentPathTests(unittest.TestCase):
             experiment_id: get_experiment_models_dir(self.load_experiment_config(filename))
             for filename, experiment_id in (
                 ("exp00_8class.yaml", "EXP00"),
-                ("exp01_12class.yaml", "EXP01"),
+                ("exp01_11class.yaml", "EXP01"),
                 ("exp02_7class.yaml", "EXP02"),
             )
         }
@@ -71,7 +71,7 @@ class ExperimentPathTests(unittest.TestCase):
             experiment_id: get_experiment_predictions_dir(self.load_experiment_config(filename))
             for filename, experiment_id in (
                 ("exp00_8class.yaml", "EXP00"),
-                ("exp01_12class.yaml", "EXP01"),
+                ("exp01_11class.yaml", "EXP01"),
                 ("exp02_7class.yaml", "EXP02"),
             )
         }
@@ -91,7 +91,7 @@ class ExperimentPathTests(unittest.TestCase):
         )
 
     def test_metrics_output_paths_are_isolated_by_experiment(self):
-        config = self.load_experiment_config("exp01_12class.yaml")
+        config = self.load_experiment_config("exp01_11class.yaml")
 
         self.assertEqual(
             get_experiment_metrics_dir(config),
@@ -151,7 +151,7 @@ class ExperimentCliPathTests(unittest.TestCase):
         argv = [
             "gene-ig-identify",
             "--config",
-            str(self.project_root / "config" / "experiments" / "exp01_12class.yaml"),
+            str(self.project_root / "config" / "experiments" / "exp01_11class.yaml"),
             "train",
             "--graphs-file",
             "graphs.pt",

@@ -129,7 +129,7 @@ class ConfigDrivenLabelMappingTests(unittest.TestCase):
         self._assert_configured_mapping(config, EXPECTED_EXP00_LABELS)
 
     def test_exp01_config_produces_expected_eleven_class_mapping(self):
-        config = self._load_experiment_config("exp01_12class.yaml")
+        config = self._load_experiment_config("exp01_11class.yaml")
 
         self.assertEqual(config.raw["experiment"]["id"], "EXP01")
         configured_labels = labels.labels_from_config(config)

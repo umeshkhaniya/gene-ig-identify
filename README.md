@@ -334,7 +334,7 @@ Experiment configs live in:
 
 ```text
 config/experiments/exp00_8class.yaml
-config/experiments/exp01_12class.yaml
+config/experiments/exp01_11class.yaml
 config/experiments/exp02_7class.yaml
 ```
 

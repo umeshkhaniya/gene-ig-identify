@@ -106,7 +106,7 @@ results/experiments/<EXPERIMENT_ID>/metrics/
 Example EXP01 training command:
 
 ```bash
-gene-ig-identify --config config/experiments/exp01_12class.yaml train \
+gene-ig-identify --config config/experiments/exp01_11class.yaml train \
   --graphs-file results/graphs/exp01_training_graphs.pt \
   --graph-lookup-file results/graphs/exp01_training_graph_lookup.pt \
   --epochs 100 \

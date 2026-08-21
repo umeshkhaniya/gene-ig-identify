@@ -101,7 +101,7 @@ class TrainingLabelSpaceTests(unittest.TestCase):
         self.assertEqual(label_space.reverse_label_mapping[7], "CD19")
 
     def test_exp01_training_label_space_resolves_to_eleven_classes(self):
-        label_space = train._label_space_from_config(self.load_config_file("exp01_12class.yaml"))
+        label_space = train._label_space_from_config(self.load_config_file("exp01_11class.yaml"))
 
         self.assertEqual(label_space.num_classes, 11)
         self.assertEqual(label_space.label_mapping["IgE"], 8)
@@ -120,7 +120,7 @@ class TrainingLabelSpaceTests(unittest.TestCase):
     def test_make_model_uses_configured_num_classes(self):
         for filename, expected_classes in (
             ("exp00_8class.yaml", 8),
-            ("exp01_12class.yaml", 11),
+            ("exp01_11class.yaml", 11),
             ("exp02_7class.yaml", 7),
         ):
             with self.subTest(filename=filename):
@@ -131,7 +131,7 @@ class TrainingLabelSpaceTests(unittest.TestCase):
                 self.assertEqual(model.lin2.out_features, expected_classes)
 
     def test_class_weights_use_configured_num_classes(self):
-        label_space = train._label_space_from_config(self.load_config_file("exp01_12class.yaml"))
+        label_space = train._label_space_from_config(self.load_config_file("exp01_11class.yaml"))
 
         weights = train._class_weights(
             [graph_with_label(0), graph_with_label(8)],
@@ -165,7 +165,7 @@ class TrainingLabelSpaceTests(unittest.TestCase):
             )
 
     def test_missing_class_warning_uses_configured_reverse_mapping(self):
-        label_space = train._label_space_from_config(self.load_config_file("exp01_12class.yaml"))
+        label_space = train._label_space_from_config(self.load_config_file("exp01_11class.yaml"))
 
         with self.assertLogs(train.LOGGER, level="WARNING") as captured:
             train._warn_missing_classes([0, 8], label_space.reverse_label_mapping)
@@ -186,14 +186,14 @@ class TrainingLabelSpaceTests(unittest.TestCase):
 
     def test_exp01_model_metadata_contains_eleven_ordered_labels(self):
         self.assert_model_label_metadata(
-            "exp01_12class.yaml",
+            "exp01_11class.yaml",
             "EXP01",
             "11class_expanded",
             EXPECTED_EXP01_LABELS,
         )
 
     def test_exp01_model_metadata_contains_new_labels(self):
-        config = self.load_config_file("exp01_12class.yaml")
+        config = self.load_config_file("exp01_11class.yaml")
         label_space = train._label_space_from_config(config)
         metadata = train._model_label_metadata(config, label_space)
 

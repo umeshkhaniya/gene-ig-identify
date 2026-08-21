@@ -1,0 +1,16 @@
+experiment:
+  id: EXP01
+  name: 11class_expanded
+
+labels:
+  - IgV
+  - IgC1
+  - IgC2
+  - IgI
+  - Cadherin
+  - IgFN3
+  - Lamin
+  - CD19
+  - IgE
+  - IgFN3-like
+  - SOD

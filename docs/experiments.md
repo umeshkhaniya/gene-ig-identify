@@ -8,7 +8,7 @@ Use these files to select an experiment:
 
 ```text
 config/experiments/exp00_8class.yaml
-config/experiments/exp01_12class.yaml
+config/experiments/exp01_11class.yaml
 config/experiments/exp02_7class.yaml
 ```
 
@@ -18,7 +18,7 @@ Pass `--config` before the subcommand to select a non-default experiment:
 
 ```bash
 gene-ig-identify --config config/experiments/exp00_8class.yaml predict dataset ...
-gene-ig-identify --config config/experiments/exp01_12class.yaml train ...
+gene-ig-identify --config config/experiments/exp01_11class.yaml train ...
 gene-ig-identify --config config/experiments/exp02_7class.yaml train ...
 ```
 
