@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import gzip
 import pickle
+from collections import Counter
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 from Bio.PDB import Polypeptide
@@ -27,6 +29,16 @@ from ..logging_utils import get_logger
 LOGGER = get_logger(__name__)
 
 
+@dataclass(frozen=True)
+class GraphBuildSummary:
+    input_rows: int
+    valid_rows: int
+    unique_domains: int
+    expected_graphs: int
+    skipped_unsupported: int
+    unsupported_labels: dict[str, int]
+
+
 def _optional_string(value) -> str | None:
     if value is None or pd.isna(value):
         return None
@@ -43,6 +55,35 @@ def _graph_name(pdb: str, chain: str, begin_res: str, end_res: str, template_nam
     if igtype:
         parts.append(igtype)
     return "_".join(parts)
+
+
+def _domain_key(row) -> str:
+    begin_res, end_res = str(row["igdomain_res_range"]).split("_")
+    return f"{str(row['pdb']).upper()}_{row['chainid']}_{begin_res}_{end_res}"
+
+
+def summarize_expected_graphs(input_table: Path, label_mapping: Mapping[str, int]) -> GraphBuildSummary:
+    input_data = normalize_domain_table(load_table(input_table))
+    unsupported_labels = Counter()
+    expected_graphs = 0
+    domain_keys = []
+
+    for _, row in input_data.iterrows():
+        domain_keys.append(_domain_key(row))
+        igtype = _optional_string(row.get("ig_type"))
+        if igtype is not None and igtype not in label_mapping:
+            unsupported_labels[igtype] += 1
+            continue
+        expected_graphs += 1
+
+    return GraphBuildSummary(
+        input_rows=len(input_data),
+        valid_rows=len(input_data),
+        unique_domains=len(set(domain_keys)),
+        expected_graphs=expected_graphs,
+        skipped_unsupported=sum(unsupported_labels.values()),
+        unsupported_labels=dict(sorted(unsupported_labels.items())),
+    )
 
 
 def create_graph_node_edge(input_excel_file, pdb_file_path, icn3dss_path, contact_file_path, icn3d_interactions, esm2_embedding_file, label_mapping):
@@ -195,6 +236,15 @@ def run(
                 f"`gene-ig-identify graphs build`."
             )
     active_label_mapping = dict(label_mapping) if label_mapping is not None else label_mapping_from_config(config)
+    expected_summary = summarize_expected_graphs(input_table, active_label_mapping)
+    LOGGER.info(
+        "Graph build expected counts: input rows=%s, valid rows=%s, unique domains=%s, expected graphs=%s, expected skipped=%s",
+        expected_summary.input_rows,
+        expected_summary.valid_rows,
+        expected_summary.unique_domains,
+        expected_summary.expected_graphs,
+        expected_summary.skipped_unsupported,
+    )
     all_graphs, graph_lookup = create_graph_node_edge(
         input_table,
         f"{pdb_dir}/",
@@ -204,6 +254,20 @@ def run(
         embeddings_file,
         active_label_mapping,
     )
+    if len(all_graphs) != expected_summary.expected_graphs:
+        raise RuntimeError(
+            "Graph count mismatch: expected "
+            f"{expected_summary.expected_graphs} graphs from {expected_summary.valid_rows} valid rows "
+            f"using the selected label mapping, but created {len(all_graphs)}."
+        )
     save_torch(all_graphs, graphs_output)
     save_torch(graph_lookup, graph_lookup_output)
+    LOGGER.info(
+        "Graph build summary: input rows=%s, valid rows=%s, unique domains=%s, graphs created=%s, graphs skipped=%s",
+        expected_summary.input_rows,
+        expected_summary.valid_rows,
+        expected_summary.unique_domains,
+        len(all_graphs),
+        expected_summary.skipped_unsupported,
+    )
     LOGGER.info("Saved %s graphs to %s and lookup to %s", len(all_graphs), graphs_output, graph_lookup_output)

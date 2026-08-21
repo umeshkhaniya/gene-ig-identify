@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import pickle
 from pathlib import Path
+import sys
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -12,6 +13,7 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
+from gene_ig_identify import cli
 from gene_ig_identify.config import load_config
 from gene_ig_identify.labels import LABEL_MAPPING, label_mapping_from_config
 from gene_ig_identify.workflows import graph_building
@@ -217,6 +219,48 @@ class GraphBuildingLabelMappingTests(unittest.TestCase):
         self.assertEqual(create_graph.call_args.args[-1], LABEL_MAPPING)
         self.assertEqual(save_torch.call_count, 2)
 
+    def test_graph_cli_passes_selected_exp01_config_to_graph_building(self):
+        config_path = self.project_root / "config" / "experiments" / "exp01_12class.yaml"
+        argv = [
+            "gene-ig-identify",
+            "--config",
+            str(config_path),
+            "graphs",
+            "build",
+            "--input-table",
+            "input/input_data.xlsx",
+            "--pdb-dir",
+            "input/pdb_files",
+            "--icn3dss-dir",
+            "input/icn3dss",
+            "--structure-features-dir",
+            "input/structure_features_residues",
+            "--icn3d-interactions-dir",
+            "input/icn3d_interactions",
+            "--embeddings-file",
+            "output/master_732_11class_esm_embeddings.h5",
+            "--graphs-output",
+            "output/master_732_graphs.pt",
+            "--graph-lookup-output",
+            "output/master_732_graph_lookup.pt",
+        ]
+
+        with (
+            patch.object(sys, "argv", argv),
+            patch.object(graph_building, "run") as graph_run,
+        ):
+            cli.main()
+
+        active_config = graph_run.call_args.args[0]
+        active_mapping = label_mapping_from_config(active_config)
+        self.assertEqual(active_config.raw["experiment"]["id"], "EXP01")
+        self.assertEqual(active_config.raw["experiment"]["name"], "11class_expanded")
+        self.assertEqual(len(active_mapping), 11)
+        self.assertEqual(active_mapping["IgE"], 8)
+        self.assertEqual(active_mapping["IgFN3-like"], 9)
+        self.assertEqual(active_mapping["SOD"], 10)
+        self.assertNotIn("ORF", active_mapping)
+
     def test_run_accepts_explicit_label_mapping(self):
         config = load_config(self.project_root / "config" / "default.yaml")
         custom_mapping = {"CustomLabel": 0}
@@ -224,7 +268,7 @@ class GraphBuildingLabelMappingTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             paths = create_minimal_graph_inputs(Path(tmp_dir), ["CustomLabel"])
             with (
-                patch.object(graph_building, "create_graph_node_edge", return_value=([], {})) as create_graph,
+                patch.object(graph_building, "create_graph_node_edge", return_value=(["graph"], {"graph": "graph"})) as create_graph,
                 patch.object(graph_building, "save_torch"),
             ):
                 graph_building.run(
@@ -241,6 +285,72 @@ class GraphBuildingLabelMappingTests(unittest.TestCase):
                 )
 
         self.assertEqual(create_graph.call_args.args[-1], custom_mapping)
+
+    def test_exp01_master_like_summary_expects_all_732_domains(self):
+        label_counts = {
+            "IgV": 202,
+            "IgC1": 80,
+            "IgC2": 22,
+            "IgE": 16,
+            "IgI": 189,
+            "Cadherin": 44,
+            "Lamin": 40,
+            "IgFN3": 58,
+            "IgFN3-like": 22,
+            "SOD": 32,
+            "CD19": 27,
+        }
+        rows = []
+        row_index = 0
+        for label, count in label_counts.items():
+            for _ in range(count):
+                rows.append(
+                    {
+                        "pdbid_chain": f"T{row_index:04d}_A",
+                        "igdomain_res_range": "1_1",
+                        "ig_type": label,
+                    }
+                )
+                row_index += 1
+
+        exp01_mapping = self.load_experiment_mapping("exp01_12class.yaml")
+
+        with TemporaryDirectory() as tmp_dir:
+            table_path = Path(tmp_dir) / "master.csv"
+            pd.DataFrame(rows).to_csv(table_path, index=False)
+
+            summary = graph_building.summarize_expected_graphs(table_path, exp01_mapping)
+
+        self.assertEqual(summary.input_rows, 732)
+        self.assertEqual(summary.valid_rows, 732)
+        self.assertEqual(summary.unique_domains, 732)
+        self.assertEqual(summary.expected_graphs, 732)
+        self.assertEqual(summary.skipped_unsupported, 0)
+        self.assertEqual(summary.unsupported_labels, {})
+
+    def test_run_detects_graph_count_mismatch(self):
+        config = load_config(self.project_root / "config" / "experiments" / "exp01_12class.yaml")
+
+        with TemporaryDirectory() as tmp_dir:
+            paths = create_minimal_graph_inputs(Path(tmp_dir), ["IgE", "IgFN3-like", "SOD"])
+            with (
+                patch.object(graph_building, "create_graph_node_edge", return_value=(["graph"], {"graph": "graph"})),
+                patch.object(graph_building, "save_torch") as save_torch,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Graph count mismatch"):
+                    graph_building.run(
+                        config,
+                        input_table=paths["table"],
+                        pdb_dir=paths["pdb_dir"],
+                        icn3dss_dir=paths["ss_dir"],
+                        structure_features_dir=paths["structure_dir"],
+                        icn3d_interactions_dir=paths["interactions_dir"],
+                        embeddings_file=paths["embeddings"],
+                        graphs_output=paths["graphs_output"],
+                        graph_lookup_output=paths["lookup_output"],
+                    )
+
+        save_torch.assert_not_called()
 
 
 if __name__ == "__main__":
